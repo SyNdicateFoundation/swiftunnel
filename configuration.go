@@ -17,9 +17,9 @@ var (
 	procInitializeUnicastIpAddressEntry = iphlpapi.NewProc("InitializeUnicastIpAddressEntry")
 )
 
-// Constants for IP address states
+// IpDadStatePreferred Constants for IP address states
 const (
-	IpDadStatePreferred = 0
+	IpDadStatePreferred = 2
 )
 
 // sockaddrIn represents an IPv4 socket address structure
@@ -48,8 +48,8 @@ func (a *Adapter) SetMTU(mtu uint32) error {
 	return nil
 }
 
-// SetUnicastIpAddressEntry sets a unicast IP address entry for the adapter
-func (a *Adapter) SetUnicastIpAddressEntry(entry *net.IPNet, dadState int) error {
+// SetUnicastIpAddressEntry sets an unicast IP address entry for the adapter
+func (a *Adapter) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	luid, err := a.GetAdapterLUID()
 	if err != nil {
 		return fmt.Errorf("failed to get adapter LUID: %w", err)

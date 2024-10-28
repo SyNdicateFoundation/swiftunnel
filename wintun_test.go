@@ -178,7 +178,7 @@ func TestAdapter_SetUnicastIpAddressEntry(t *testing.T) {
 		IP:   net.ParseIP("8.8.8.8"),
 		Mask: net.CIDRMask(24, 32),
 	}
-	if err := adapter.SetUnicastIpAddressEntry(ipNet, IpDadStatePreferred); err != nil {
+	if err := adapter.SetUnicastIpAddressEntry(ipNet); err != nil {
 		t.Errorf("Failed to set unicast IP address: %v", err)
 	}
 }
