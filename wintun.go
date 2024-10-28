@@ -1,6 +1,6 @@
 //go:build windows
 
-package wintun
+package wintungo
 
 import (
 	"errors"

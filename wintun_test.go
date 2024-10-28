@@ -1,5 +1,5 @@
 // main_test.go
-package wintun
+package wintungo
 
 import (
 	"encoding/binary"

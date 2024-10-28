@@ -1,6 +1,6 @@
 //go:build windows && arm64
 
-package wintun
+package wintungo
 
 import _ "embed"
 

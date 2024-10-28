@@ -1,4 +1,4 @@
-package wintun
+package wintungo
 
 import (
 	"errors"
