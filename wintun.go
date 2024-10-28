@@ -118,6 +118,14 @@ func NewWintunAdapter(name, tunnelType string) (*Adapter, error) {
 
 // NewWintunAdapterWithGUID creates a new Wintun adapter with a specified GUID.
 func NewWintunAdapterWithGUID(name, tunnelType string, guid windows.GUID) (*Adapter, error) {
+	if name == "" {
+		name = "Wintun"
+	}
+
+	if tunnelType == "" {
+		tunnelType = "VPN Tunnel"
+	}
+
 	namePtr, err := windows.UTF16PtrFromString(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert adapter name: %w", err)
@@ -279,4 +287,9 @@ func (a *Adapter) GetAdapterLUID() (LUID, error) {
 	}
 
 	return luid, nil
+}
+
+// GetAdapterName retrieves the name of the adapter.
+func (a *Adapter) GetAdapterName() string {
+	return a.name
 }
