@@ -4,6 +4,7 @@ package wintun
 import (
 	"encoding/binary"
 	"golang.org/x/sys/windows"
+	"net"
 	"testing"
 )
 
@@ -34,8 +35,8 @@ func TestWintunAdapter(t *testing.T) {
 	defer adapter.Close() // Ensure the adapter is closed after the test
 
 	// Check the adapter name
-	if adapter.Name != adapterName {
-		t.Errorf("Expected adapter name %s, got %s", adapterName, adapter.Name)
+	if adapter.name != adapterName {
+		t.Errorf("Expected adapter name %s, got %s", adapterName, adapter.name)
 	}
 
 	// Start a session
@@ -150,4 +151,50 @@ func TestSession_ReceivePacket(t *testing.T) {
 	} else {
 		t.Logf("Received packet: %v", packet)
 	}
+}
+
+func TestAdapter_SetMTU(t *testing.T) {
+	adapter, err := NewWintunAdapterWithGUID(adapterName, tunnelType, testGUID)
+	if err != nil {
+		t.Fatalf("Failed to create Wintun adapter: %v", err)
+	}
+	defer adapter.Close()
+
+	// Set the MTU to 1400
+	if err := adapter.SetMTU(1400); err != nil {
+		t.Errorf("Failed to set MTU: %v", err)
+	}
+}
+
+func TestAdapter_SetUnicastIpAddressEntry(t *testing.T) {
+	adapter, err := NewWintunAdapterWithGUID(adapterName, tunnelType, testGUID)
+	if err != nil {
+		t.Fatalf("Failed to create Wintun adapter: %v", err)
+	}
+	defer adapter.Close()
+
+	// Set the IP address
+	ipNet := &net.IPNet{
+		IP:   net.ParseIP("8.8.8.8"),
+		Mask: net.CIDRMask(24, 32),
+	}
+	if err := adapter.SetUnicastIpAddressEntry(ipNet, IpDadStatePreferred); err != nil {
+		t.Errorf("Failed to set unicast IP address: %v", err)
+	}
+}
+
+func TestAdapter_SetDNS(t *testing.T) {
+	adapter, err := NewWintunAdapterWithGUID(adapterName, tunnelType, testGUID)
+	if err != nil {
+		t.Fatalf("Failed to create Wintun adapter: %v", err)
+	}
+
+	defer adapter.Close()
+
+	// Set the DNS servers
+	dnsServers := []net.IP{net.ParseIP("8.8.8.8"), net.ParseIP("8.8.4.4")}
+	if err := adapter.SetDNS(dnsServers); err != nil {
+		t.Errorf("Failed to set DNS servers: %v", err)
+	}
+
 }

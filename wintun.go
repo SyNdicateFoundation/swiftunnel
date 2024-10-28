@@ -5,7 +5,6 @@ package wintun
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
 	"unsafe"
@@ -13,18 +12,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-/*
-#cgo LDFLAGS: -liphlpapi
-#include <wintun.h>
-#include <iphlpapi.h>
-
-#pragma comment(lib, "iphlpapi.lib")
-*/
-import "C"
-
 // Wintun DLL functions
-//
-//goland:noinspection GoErrorStringFormat
 var (
 	wintunDLL                         *windows.DLL
 	wintunCreateAdapterFunc           *windows.Proc
@@ -38,15 +26,15 @@ var (
 	wintunGetReadWaitEventFunc        *windows.Proc
 	wintunReleaseReceivePacketFunc    *windows.Proc
 	wintunGetAdapterLUIDFunc          *windows.Proc
-	errZero                           = windows.Errno(0)
 )
+
+var errZero = windows.Errno(0)
 
 func init() {
 	if runtime.GOOS != "windows" {
 		panic("Wintun is only supported on Windows")
 	}
 
-	// Create a temporary DLL file
 	dllFile, err := os.CreateTemp("", "wintun_*.dll")
 	if err != nil {
 		panic(fmt.Errorf("failed to create temp file for Wintun DLL: %w", err))
@@ -54,7 +42,6 @@ func init() {
 
 	defer os.Remove(dllFile.Name()) // Clean up on exit
 
-	// Write the Wintun DLL data to the temporary file
 	if _, err := dllFile.Write(wintunDLLData); err != nil {
 		panic(fmt.Errorf("failed to write Wintun DLL data: %w", err))
 	}
@@ -63,32 +50,59 @@ func init() {
 		panic(fmt.Errorf("failed to close temp file: %w", err))
 	}
 
-	// Load the Wintun DLL
+	// Load the Wintun DLL and its functions
 	wintunDLL = windows.MustLoadDLL(dllFile.Name())
-
-	// Load the required functions from the DLL
 	loadWintunFunctions()
 }
 
 func loadWintunFunctions() {
-	wintunCreateAdapterFunc = wintunDLL.MustFindProc("WintunCreateAdapter")
-	wintunCloseAdapterFunc = wintunDLL.MustFindProc("WintunCloseAdapter")
-	wintunStartSessionFunc = wintunDLL.MustFindProc("WintunStartSession")
-	wintunAllocateSendPacketFunc = wintunDLL.MustFindProc("WintunAllocateSendPacket")
-	wintunEndSessionFunc = wintunDLL.MustFindProc("WintunEndSession")
-	wintunGetRunningDriverVersionFunc = wintunDLL.MustFindProc("WintunGetRunningDriverVersion")
-	wintunSendPacketFunc = wintunDLL.MustFindProc("WintunSendPacket")
-	wintunReceivePacketFunc = wintunDLL.MustFindProc("WintunReceivePacket")
-	wintunGetReadWaitEventFunc = wintunDLL.MustFindProc("WintunGetReadWaitEvent")
-	wintunReleaseReceivePacketFunc = wintunDLL.MustFindProc("WintunReleaseReceivePacket")
-	wintunGetAdapterLUIDFunc = wintunDLL.MustFindProc("WintunGetAdapterLUID")
+	procs := []**windows.Proc{
+		&wintunCreateAdapterFunc,
+		&wintunCloseAdapterFunc,
+		&wintunStartSessionFunc,
+		&wintunAllocateSendPacketFunc,
+		&wintunEndSessionFunc,
+		&wintunGetRunningDriverVersionFunc,
+		&wintunSendPacketFunc,
+		&wintunReceivePacketFunc,
+		&wintunGetReadWaitEventFunc,
+		&wintunReleaseReceivePacketFunc,
+		&wintunGetAdapterLUIDFunc,
+	}
+
+	names := []string{
+		"WintunCreateAdapter",
+		"WintunCloseAdapter",
+		"WintunStartSession",
+		"WintunAllocateSendPacket",
+		"WintunEndSession",
+		"WintunGetRunningDriverVersion",
+		"WintunSendPacket",
+		"WintunReceivePacket",
+		"WintunGetReadWaitEvent",
+		"WintunReleaseReceivePacket",
+		"WintunGetAdapterLUID",
+	}
+
+	for i, name := range names {
+		*procs[i] = wintunDLL.MustFindProc(name)
+	}
 }
 
-type LUID C.NET_LUID
+type LUID struct {
+	LowPart  uint32
+	HighPart int32
+}
+
+func (l LUID) String() string {
+	return fmt.Sprintf("LUID{LowPart: %d, HighPart: %d}", l.LowPart, l.HighPart)
+}
+
+var NilLUID = LUID{}
 
 type Adapter struct {
-	Name       string
-	TunnelType string
+	name       string
+	tunnelType string
 	handle     uintptr
 }
 
@@ -97,7 +111,7 @@ type Session struct {
 	waitEvent windows.Handle
 }
 
-// NewWintunAdapter creates a new Wintun adapter with the specified name and tunnel type.
+// NewWintunAdapter creates a new Wintun adapter.
 func NewWintunAdapter(name, tunnelType string) (*Adapter, error) {
 	return NewWintunAdapterWithGUID(name, tunnelType, windows.GUID{})
 }
@@ -106,12 +120,12 @@ func NewWintunAdapter(name, tunnelType string) (*Adapter, error) {
 func NewWintunAdapterWithGUID(name, tunnelType string, guid windows.GUID) (*Adapter, error) {
 	namePtr, err := windows.UTF16PtrFromString(name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to convert adapter name: %w", err)
 	}
 
 	tunnelTypePtr, err := windows.UTF16PtrFromString(tunnelType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to convert tunnel type: %w", err)
 	}
 
 	var handle uintptr
@@ -133,13 +147,12 @@ func NewWintunAdapterWithGUID(name, tunnelType string, guid windows.GUID) (*Adap
 		return nil, fmt.Errorf("failed to create Wintun adapter: %v", err)
 	}
 
-	return &Adapter{handle: handle, Name: name, TunnelType: tunnelType}, nil
+	return &Adapter{handle: handle, name: name, tunnelType: tunnelType}, nil
 }
 
 // Close closes the Wintun adapter.
 func (a *Adapter) Close() error {
-	_, _, err := wintunCloseAdapterFunc.Call(a.handle)
-	if err != nil && !errors.Is(err, errZero) {
+	if _, _, err := wintunCloseAdapterFunc.Call(a.handle); err != nil && !errors.Is(err, errZero) {
 		return fmt.Errorf("failed to close Wintun adapter: %v", err)
 	}
 	return nil
@@ -165,8 +178,7 @@ func (a *Adapter) StartSession(capacity uint32) (*Session, error) {
 
 // Close ends the Wintun session.
 func (s *Session) Close() error {
-	_, _, err := wintunEndSessionFunc.Call(s.handle)
-	if err != nil && !errors.Is(err, errZero) {
+	if _, _, err := wintunEndSessionFunc.Call(s.handle); err != nil && !errors.Is(err, errZero) {
 		return fmt.Errorf("failed to end Wintun session: %v", err)
 	}
 	return nil
@@ -175,54 +187,50 @@ func (s *Session) Close() error {
 // SendPacket sends a packet over the Wintun session.
 func (s *Session) SendPacket(packet []byte) error {
 	if len(packet) == 0 {
-		return fmt.Errorf("packet cannot be empty")
+		return errors.New("packet cannot be empty")
 	}
 
 	// Allocate memory for the packet in the Wintun session
-	data, _, err := wintunAllocateSendPacketFunc.Call(s.handle, uintptr(len(packet)))
+	dataPtr, _, err := wintunAllocateSendPacketFunc.Call(s.handle, uintptr(len(packet)))
 	if err != nil && !errors.Is(err, errZero) {
 		return fmt.Errorf("failed to allocate Wintun packet: %v", err)
 	}
 
-	if data != 0 {
-		C.memcpy(unsafe.Pointer(data), unsafe.Pointer(&packet[0]), C.size_t(len(packet)))
-	} else {
-		return fmt.Errorf("allocated data pointer is invalid")
+	if dataPtr == 0 {
+		return errors.New("allocated data pointer is invalid")
 	}
+
+	// Copy packet data to the allocated memory
+	dst := (*[1 << 30]byte)(unsafe.Pointer(dataPtr))[:len(packet):len(packet)]
+	copy(dst, packet)
 
 	// Send the packet
-	_, _, err = wintunSendPacketFunc.Call(s.handle, data, uintptr(len(packet)))
-	if err != nil && !errors.Is(err, errZero) {
+	if _, _, err := wintunSendPacketFunc.Call(s.handle, dataPtr, uintptr(len(packet))); err != nil && !errors.Is(err, errZero) {
 		return fmt.Errorf("failed to send Wintun packet: %v", err)
 	}
-
 	return nil
 }
 
-// ReceivePacketNow receives a packet from the Wintun session. If no packet is available, it returns nil.
+// ReceivePacketNow receives a packet from the Wintun session. Returns nil if no packet is available.
 func (s *Session) ReceivePacketNow() ([]byte, error) {
-	var packetSize C.DWORD
-	var packetPtr *C.BYTE // Pointer to C.BYTE
-
-	// Call the Wintun receive packet function
-	ret, _, err := wintunReceivePacketFunc.Call(s.handle, uintptr(unsafe.Pointer(&packetPtr)), uintptr(unsafe.Pointer(&packetSize)))
+	var packetSize uint32
+	packetPtr, _, err := wintunReceivePacketFunc.Call(s.handle, uintptr(unsafe.Pointer(&packetSize)))
 	if err != nil && !errors.Is(err, errZero) {
 		return nil, err
 	}
 
-	// Check if the return value indicates success (assuming non-zero indicates success)
-	if ret == 0 {
-		return nil, fmt.Errorf("failed to receive Wintun packet: %v", err)
+	if packetPtr == 0 {
+		return nil, errors.New("failed to receive Wintun packet")
 	}
 
-	log.Println("Packet size:", packetSize)
-
-	// Convert packetPtr to a Go slice using C.GoBytes
-	packet := C.GoBytes(unsafe.Pointer(packetPtr), C.int(packetSize))
+	// Convert packetPtr to a Go slice
+	packet := make([]byte, packetSize)
+	if packetSize > 0 {
+		copy(packet, (*[1 << 30]byte)(unsafe.Pointer(packetPtr))[:packetSize])
+	}
 
 	// Release the received packet
-	_, _, err = wintunReleaseReceivePacketFunc.Call(s.handle, uintptr(unsafe.Pointer(&packetPtr)))
-	if err != nil && !errors.Is(err, errZero) {
+	if _, _, err := wintunReleaseReceivePacketFunc.Call(s.handle, packetPtr); err != nil && !errors.Is(err, errZero) {
 		return nil, err
 	}
 
@@ -253,22 +261,21 @@ func (s *Session) ReceivePacket() ([]byte, error) {
 func (a *Adapter) GetRunningDriverVersion() (string, error) {
 	ret, _, err := wintunGetRunningDriverVersionFunc.Call()
 	if err != nil && !errors.Is(err, errZero) {
-		return "", fmt.Errorf("failed to get running Wintun driver version: %v", err)
+		return "", fmt.Errorf("failed to get Wintun driver version: %v", err)
 	}
 
 	version := uint32(ret)
 	major := (version >> 16) & 0xff
 	minor := version & 0xff
+
 	return fmt.Sprintf("%d.%d", major, minor), nil
 }
 
-// GetAdapterLUID retrieves the LUID of the Wintun adapter.
+// GetAdapterLUID retrieves the LUID of the adapter.
 func (a *Adapter) GetAdapterLUID() (LUID, error) {
 	var luid LUID
-
-	_, _, err := wintunGetAdapterLUIDFunc.Call(a.handle, uintptr(unsafe.Pointer(&luid)))
-	if err != nil && !errors.Is(err, errZero) {
-		return luid, fmt.Errorf("failed to get adapter LUID: %w", err)
+	if _, _, err := wintunGetAdapterLUIDFunc.Call(a.handle, uintptr(unsafe.Pointer(&luid))); err != nil && !errors.Is(err, errZero) {
+		return NilLUID, fmt.Errorf("failed to get adapter LUID: %v", err)
 	}
 
 	return luid, nil
