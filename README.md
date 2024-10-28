@@ -1,6 +1,6 @@
-# 🎉 Wintun-Go: A Go Wrapper for Wintun.NET 🚀
+# 🎉 wintungo: A Go Wrapper for Wintun.NET 🚀
 
-Welcome to **Wintun-Go**, a Golang wrapper for the [wintun](https://www.wintun.net/) project! Wintun is a fast and efficient tunnel interface for Windows, and this package provides an easy way to use its functionalities in your Go applications.
+Welcome to **wintungo**, a Golang wrapper for the [wintun](https://www.wintun.net/) project! Wintun is a fast and efficient tunnel interface for Windows, and this package provides an easy way to use its functionalities in your Go applications.
 
 ## 📦 Features
 
@@ -12,10 +12,10 @@ Welcome to **Wintun-Go**, a Golang wrapper for the [wintun](https://www.wintun.n
 
 ## ⚙️ Installation
 
-To install the Wintun-Go package, use the following command:
+To install the wintungo package, use the following command:
 
 ```bash
-go get github.com/XenonCommunity/wintun-go
+go get github.com/XenonCommunity/wintungo
 ```
 
 ## 🛠️ Usage
@@ -27,7 +27,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"github.com/XenonCommunity/wintun-go"
+	"github.com/XenonCommunity/wintungo"
 )
 
 func main() {
@@ -63,7 +63,7 @@ func main() {
 
 ## 📜 Documentation
 
-For more detailed documentation on functions and methods available in the Wintun-Go package, please refer to the [GoDoc](https://pkg.go.dev/github.com/XenonCommunity/wintun-go).
+For more detailed documentation on functions and methods available in the wintungo package, please refer to the [GoDoc](https://pkg.go.dev/github.com/XenonCommunity/wintungo).
 
 ## 💡 Contributing
 
