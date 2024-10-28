@@ -1,4 +1,4 @@
-module github.com/XenonCommunity/wintun-go
+module github.com/XenonCommunity/wintungo
 
 go 1.23
 
