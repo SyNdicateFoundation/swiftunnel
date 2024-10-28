@@ -39,7 +39,7 @@ func main() {
 	defer adapter.Close()
 
 	// Start a new session
-	session, err := adapter.StartSession(2048) // Capacity in bytes
+	session, err := adapter.StartSession(0x400000) // Capacity in bytes (4 MB)
 	if err != nil {
 		log.Fatalf("Error starting session: %v", err)
 	}
