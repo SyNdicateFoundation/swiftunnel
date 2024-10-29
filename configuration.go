@@ -22,80 +22,9 @@ var (
 	procSetIfEntry                      = iphlpapi.NewProc("SetIfEntry")
 )
 
-// nlDadState represents the duplicate address detection state.
-type nlDadState uint32
-
-const (
-	IpDadStateInvalid    nlDadState = iota // 0: The DAD state is invalid.
-	IpDadStateTentative                    // 1: The DAD state is tentative.
-	IpDadStateDuplicate                    // 2: A duplicate IP address has been detected.
-	IpDadStateDeprecated                   // 3: The IP address has been deprecated.
-	IpDadStatePreferred                    // 4: The IP address is preferred.
-)
-
 type DNSConfig struct {
 	Domain     string
 	DnsServers []string
-}
-
-type sockaddrInet struct {
-	Ipv4     windows.RawSockaddrInet4
-	Ipv6     windows.RawSockaddrInet6
-	siFamily uint16 // Address family (AF_INET for IPv4, AF_INET6 for IPv6)
-}
-
-type mibUnicastipaddressRow struct {
-	Address            sockaddrInet
-	InterfaceLuid      windows.LUID
-	OnLinkPrefixLength uint8
-	DadState           nlDadState
-}
-
-type dnsInterfaceSettings struct {
-	Version             uint32
-	Flags               uint64
-	Domain              *uint16
-	NameServer          *uint16
-	SearchList          *uint16
-	RegistrationEnabled uint32
-	RegisterAdapterName uint32
-	EnableLLMNR         uint32
-	QueryAdapterName    uint32
-	ProfileNameServer   *uint16
-}
-
-const (
-	maxInterfaceNameLen = 256
-	maxlenPhysaddr      = 8
-	maxlenIfdescr       = 256
-)
-
-// mibIfrow is the Go representation of the mibIfrow structure.
-type mibIfrow struct {
-	WszName           [maxInterfaceNameLen]uint16 // WCHAR is equivalent to uint16 in Go
-	DwIndex           uint32                      // IF_INDEX (equivalent to DWORD in Go)
-	DwType            uint32                      // IFTYPE (also DWORD)
-	DwMtu             uint32
-	DwSpeed           uint32
-	DwPhysAddrLen     uint32
-	BPhysAddr         [maxlenPhysaddr]byte
-	DwAdminStatus     uint32
-	DwOperStatus      uint32 // INTERNAL_IF_OPER_STATUS (equivalent to DWORD in Go)
-	DwLastChange      uint32
-	DwInOctets        uint32
-	DwInUcastPkts     uint32
-	DwInNUcastPkts    uint32
-	DwInDiscards      uint32
-	DwInErrors        uint32
-	DwInUnknownProtos uint32
-	DwOutOctets       uint32
-	DwOutUcastPkts    uint32
-	DwOutNUcastPkts   uint32
-	DwOutDiscards     uint32
-	DwOutErrors       uint32
-	DwOutQLen         uint32
-	DwDescrLen        uint32
-	BDescr            [maxlenIfdescr]byte
 }
 
 // SetMTU sets the MTU for the adapter using a netsh command
@@ -131,31 +60,27 @@ func (a *Adapter) SetUnicastIpAddressEntry(entry *net.IPNet, dadState nlDadState
 		return fmt.Errorf("failed to get adapter LUID: %w", err)
 	}
 
-	var addressRow mibUnicastipaddressRow
+	var addressRow nibUnicastIPAddressRow
 
-	// Initialize the entry
-	ret, _, _ := procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
-	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
-		return fmt.Errorf("failed to initialize unicast IP address entry: %w", errno)
-	}
+	procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
 
 	// Set the IP address and family
 	if ipv4 := entry.IP.To4(); ipv4 != nil {
-		addressRow.Address.Ipv4.Family = windows.AF_INET
-		copy(addressRow.Address.Ipv4.Addr[:], ipv4)
+		addressRow.Address.Family = windows.AF_INET
+		copy(addressRow.Address.data[:], ipv4)
 	} else {
-		addressRow.Address.Ipv6.Family = windows.AF_INET6
-		copy(addressRow.Address.Ipv6.Addr[:], entry.IP.To16())
+		addressRow.Address.Family = windows.AF_INET6
+		copy(addressRow.Address.data[:], entry.IP.To16())
 	}
 
 	// Set additional fields
 	ones, _ := entry.Mask.Size()
-	addressRow.InterfaceLuid = luid
+	addressRow.InterfaceLUID = convertLUIDtouint64(luid)
 	addressRow.OnLinkPrefixLength = uint8(ones)
 	addressRow.DadState = dadState
 
 	// Create the unicast IP address entry
-	ret, _, _ = procCreateUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
+	ret, _, _ := procCreateUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) && !errors.Is(errno, windows.ERROR_OBJECT_ALREADY_EXISTS) {
 		return fmt.Errorf("failed to create unicast IP address entry: %w", errno)
 	}

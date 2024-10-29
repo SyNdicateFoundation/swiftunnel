@@ -6,7 +6,6 @@ import (
 	"golang.org/x/sys/windows"
 	"net"
 	"testing"
-	"time"
 )
 
 func calculateChecksum(data []byte) uint16 {
@@ -208,15 +207,10 @@ func TestAdapter_SetUnicastIpAddressEntry(t *testing.T) {
 	defer adapter.Close()
 
 	// Set the IP address
-	ipNet := &net.IPNet{
-		IP:   net.ParseIP("10.6.7.7"),
-		Mask: net.CIDRMask(24, 32),
-	}
+	_, ipNet, _ := net.ParseCIDR("10.6.7.7/24")
 	if err := adapter.SetUnicastIpAddressEntry(ipNet, IpDadStatePreferred); err != nil {
 		t.Errorf("Failed to set unicast IP address: %v", err)
 	}
-	//
-	//time.Sleep(10 * time.Second)
 }
 
 func TestAdapter_SetDNS(t *testing.T) {
@@ -238,6 +232,4 @@ func TestAdapter_SetDNS(t *testing.T) {
 	if err := adapter.SetDNS(config); err != nil {
 		t.Errorf("Failed to set DNS servers: %v", err)
 	}
-
-	time.Sleep(10 * time.Second)
 }
