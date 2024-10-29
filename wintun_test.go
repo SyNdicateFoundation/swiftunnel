@@ -6,6 +6,7 @@ import (
 	"golang.org/x/sys/windows"
 	"net"
 	"testing"
+	"time"
 )
 
 func calculateChecksum(data []byte) uint16 {
@@ -111,6 +112,39 @@ func TestGetAdapterLUID(t *testing.T) {
 	}
 }
 
+func TestAdapter_GetAdapterGUID(t *testing.T) {
+	adapter, err := NewWintunAdapterWithGUID(adapterName, tunnelType, testGUID)
+	if err != nil {
+		t.Fatalf("Failed to create Wintun adapter: %v", err)
+	}
+	defer adapter.Close()
+
+	// Get the adapter GUID
+	guid, err := adapter.GetAdapterGUID()
+	if err != nil {
+		t.Errorf("Failed to get adapter GUID: %v", err)
+	} else {
+		t.Logf("testGUID: %v", testGUID)
+		t.Logf("Adapter GUID: %v", guid)
+	}
+}
+
+func TestAdapter_GetAdapterIndex(t *testing.T) {
+	adapter, err := NewWintunAdapterWithGUID(adapterName, tunnelType, testGUID)
+	if err != nil {
+		t.Fatalf("Failed to create Wintun adapter: %v", err)
+	}
+	defer adapter.Close()
+
+	// Get the adapter index
+	index, err := adapter.GetAdapterIndex()
+	if err != nil {
+		t.Errorf("Failed to get adapter index: %v", err)
+	} else {
+		t.Logf("Adapter index: %v", index)
+	}
+}
+
 func TestSession_ReceivePacketNow(t *testing.T) {
 	adapter, err := NewWintunAdapterWithGUID(adapterName, tunnelType, testGUID)
 	if err != nil {
@@ -175,12 +209,14 @@ func TestAdapter_SetUnicastIpAddressEntry(t *testing.T) {
 
 	// Set the IP address
 	ipNet := &net.IPNet{
-		IP:   net.ParseIP("8.8.8.8"),
+		IP:   net.ParseIP("10.6.7.7"),
 		Mask: net.CIDRMask(24, 32),
 	}
-	if err := adapter.SetUnicastIpAddressEntry(ipNet); err != nil {
+	if err := adapter.SetUnicastIpAddressEntry(ipNet, IpDadStatePreferred); err != nil {
 		t.Errorf("Failed to set unicast IP address: %v", err)
 	}
+	//
+	//time.Sleep(10 * time.Second)
 }
 
 func TestAdapter_SetDNS(t *testing.T) {
@@ -192,9 +228,16 @@ func TestAdapter_SetDNS(t *testing.T) {
 	defer adapter.Close()
 
 	// Set the DNS servers
-	dnsServers := []net.IP{net.ParseIP("8.8.8.8"), net.ParseIP("8.8.4.4")}
-	if err := adapter.SetDNS(dnsServers); err != nil {
+	config := DNSConfig{
+		Domain: "example.com",
+		DnsServers: []string{
+			"8.8.8.8",
+			"8.8.4.4",
+		},
+	}
+	if err := adapter.SetDNS(config); err != nil {
 		t.Errorf("Failed to set DNS servers: %v", err)
 	}
 
+	time.Sleep(10 * time.Second)
 }
