@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
+	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -28,29 +28,29 @@ var (
 	wintunGetAdapterLUIDFunc          *windows.Proc
 )
 
+var once sync.Once
+
 func init() {
-	if runtime.GOOS != "windows" {
-		panic("Wintun is only supported on Windows")
-	}
+	once.Do(func() {
+		dllFile, err := os.CreateTemp("", "wintun_*.dll")
+		if err != nil {
+			panic(fmt.Errorf("failed to create temp file for Wintun DLL: %w", err))
+		}
 
-	dllFile, err := os.CreateTemp("", "wintun_*.dll")
-	if err != nil {
-		panic(fmt.Errorf("failed to create temp file for Wintun DLL: %w", err))
-	}
+		defer os.Remove(dllFile.Name()) // Clean up on exit
 
-	defer os.Remove(dllFile.Name()) // Clean up on exit
+		if _, err := dllFile.Write(wintunDLLData); err != nil {
+			panic(fmt.Errorf("failed to write Wintun DLL data: %w", err))
+		}
 
-	if _, err := dllFile.Write(wintunDLLData); err != nil {
-		panic(fmt.Errorf("failed to write Wintun DLL data: %w", err))
-	}
+		if err := dllFile.Close(); err != nil {
+			panic(fmt.Errorf("failed to close temp file: %w", err))
+		}
 
-	if err := dllFile.Close(); err != nil {
-		panic(fmt.Errorf("failed to close temp file: %w", err))
-	}
-
-	// Load the Wintun DLL and its functions
-	wintunDLL = windows.MustLoadDLL(dllFile.Name())
-	loadWintunFunctions()
+		// Load the Wintun DLL and its functions
+		wintunDLL = windows.MustLoadDLL(dllFile.Name())
+		loadWintunFunctions()
+	})
 }
 
 func loadWintunFunctions() {
