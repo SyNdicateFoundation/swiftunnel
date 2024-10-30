@@ -7,7 +7,7 @@ func TestDiscoverGatewayIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("IPV4: %v", ip)
+	t.Logf("IPv4: %v", ip)
 }
 
 func TestDiscoverGatewayIPv6(t *testing.T) {
@@ -16,5 +16,5 @@ func TestDiscoverGatewayIPv6(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Logf("IPV6: %v", ip)
+	t.Logf("IPv6: %v", ip)
 }
