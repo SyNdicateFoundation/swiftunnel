@@ -3,6 +3,8 @@ package wintungo
 
 import (
 	"encoding/binary"
+	"encoding/hex"
+	"errors"
 	"golang.org/x/sys/windows"
 	"net"
 	"testing"
@@ -123,8 +125,8 @@ func TestAdapter_GetAdapterGUID(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get adapter GUID: %v", err)
 	} else {
-		t.Logf("testGUID: %v", testGUID)
-		t.Logf("Adapter GUID: %v", guid)
+		t.Logf("Wanted GUID: %v", testGUID)
+		t.Logf("Current GUID: %v", guid)
 	}
 }
 
@@ -158,7 +160,7 @@ func TestSession_ReceivePacketNow(t *testing.T) {
 	defer session.Close()
 
 	packet, err := session.ReceivePacketNow()
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoDataAvailable) {
 		t.Errorf("Failed to receive packet: %v", err)
 	} else {
 		t.Logf("Received packet: %v", packet)
@@ -182,7 +184,7 @@ func TestSession_ReceivePacket(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to receive packet: %v", err)
 	} else {
-		t.Logf("Received packet: %v", packet)
+		t.Logf("Received packet: %v", hex.EncodeToString(packet))
 	}
 }
 

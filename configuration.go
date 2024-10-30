@@ -27,7 +27,15 @@ type DNSConfig struct {
 	DnsServers []string
 }
 
-// SetMTU sets the MTU for the adapter using a netsh command
+// SetMTU sets the Maximum Transmission Unit (MTU) of the adapter.
+//
+// This method requires administrator privileges.
+//
+// The MTU is the maximum size of a packet that can be transmitted
+// on the adapter. The value is in bytes.
+//
+// The method returns an error if it fails to retrieve or update the
+// interface entry.
 func (a *Adapter) SetMTU(mtu uint32) error {
 	index, err := a.GetAdapterIndex()
 	if err != nil {
@@ -54,6 +62,18 @@ func (a *Adapter) SetMTU(mtu uint32) error {
 	return nil
 }
 
+// SetUnicastIpAddressEntry sets a unicast IP address entry on the adapter.
+//
+// The `dadState` parameter specifies the duplicate address detection state of the
+// IP address entry. A value of `nlDadStatePreferred` means that the IP address
+// is a preferred address, and a value of `nlDadStateDuplicate` means that the IP
+// address is a duplicate.
+//
+// If the IP address entry already exists, the function will return an error
+// containing the value `windows.ERROR_OBJECT_ALREADY_EXISTS`.
+//
+// The function returns an error if it fails to set the IP address entry, or if
+// it fails to retrieve the adapter LUID.
 func (a *Adapter) SetUnicastIpAddressEntry(entry *net.IPNet, dadState nlDadState) error {
 	luid, err := a.GetAdapterLUID()
 	if err != nil {
@@ -88,7 +108,13 @@ func (a *Adapter) SetUnicastIpAddressEntry(entry *net.IPNet, dadState nlDadState
 	return nil
 }
 
-// SetDNS sets the DNS servers for the adapter
+// SetDNS sets the DNS configuration for the adapter.
+//
+// If config.Domain is specified, it will be set as the DNS domain for the adapter.
+//
+// If config.DnsServers is not empty, it will be set as the DNS servers for the adapter.
+//
+// If config is empty, the DNS configuration will be reset to the default.
 func (a *Adapter) SetDNS(config DNSConfig) error {
 	guid, err := a.GetAdapterGUID()
 	if err != nil {
