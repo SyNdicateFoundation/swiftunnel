@@ -54,36 +54,21 @@ func init() {
 }
 
 func loadWintunFunctions() {
-	procs := []**windows.Proc{
-		&wintunCreateAdapterFunc,
-		&wintunCloseAdapterFunc,
-		&wintunStartSessionFunc,
-		&wintunAllocateSendPacketFunc,
-		&wintunEndSessionFunc,
-		&wintunGetRunningDriverVersionFunc,
-		&wintunSendPacketFunc,
-		&wintunReceivePacketFunc,
-		&wintunGetReadWaitEventFunc,
-		&wintunReleaseReceivePacketFunc,
-		&wintunGetAdapterLUIDFunc,
+	var procs = map[string]**windows.Proc{
+		"WintunCreateAdapter":           &wintunCreateAdapterFunc,
+		"WintunCloseAdapter":            &wintunCloseAdapterFunc,
+		"WintunStartSession":            &wintunStartSessionFunc,
+		"WintunAllocateSendPacket":      &wintunAllocateSendPacketFunc,
+		"WintunEndSession":              &wintunEndSessionFunc,
+		"WintunGetRunningDriverVersion": &wintunGetRunningDriverVersionFunc,
+		"WintunSendPacket":              &wintunSendPacketFunc,
+		"WintunReceivePacket":           &wintunReceivePacketFunc,
+		"WintunGetReadWaitEvent":        &wintunGetReadWaitEventFunc,
+		"WintunReleaseReceivePacket":    &wintunReleaseReceivePacketFunc,
+		"WintunGetAdapterLUID":          &wintunGetAdapterLUIDFunc,
 	}
-
-	names := []string{
-		"WintunCreateAdapter",
-		"WintunCloseAdapter",
-		"WintunStartSession",
-		"WintunAllocateSendPacket",
-		"WintunEndSession",
-		"WintunGetRunningDriverVersion",
-		"WintunSendPacket",
-		"WintunReceivePacket",
-		"WintunGetReadWaitEvent",
-		"WintunReleaseReceivePacket",
-		"WintunGetAdapterLUID",
-	}
-
-	for i, name := range names {
-		*procs[i] = wintunDLL.MustFindProc(name)
+	for name, proc := range procs {
+		*proc = wintunDLL.MustFindProc(name)
 	}
 }
 
