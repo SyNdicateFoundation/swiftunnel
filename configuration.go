@@ -62,7 +62,7 @@ func (a *Adapter) SetMTU(mtu uint32) error {
 	return nil
 }
 
-// SetUnicastIpAddressEntry sets a unicast IP address entry on the adapter.
+// SetUnicastIpAddressEntry sets an unicast IP address entry on the adapter.
 //
 // The `dadState` parameter specifies the duplicate address detection state of the
 // IP address entry. A value of `nlDadStatePreferred` means that the IP address
