@@ -16,7 +16,7 @@ func DiscoverGatewayIPv4() (ip net.IP, err error) {
 		return nil, err
 	}
 
-	ipv4 := net.ParseIP(ipstr)
+	ipv4 := net.ParseIP(string(ipstr))
 	if ipv4 == nil {
 		return nil, errCantParse
 	}
@@ -29,7 +29,7 @@ func DiscoverGatewayIPv6() (ip net.IP, err error) {
 		return nil, err
 	}
 
-	ipv6 := net.ParseIP(ipstr)
+	ipv6 := net.ParseIP(string(ipstr))
 	if ipv6 == nil {
 		return nil, errCantParse
 	}
