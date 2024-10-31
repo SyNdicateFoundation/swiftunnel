@@ -7,6 +7,8 @@ import (
 	"os/exec"
 )
 
+var errCantParse = errors.New("unable to parse route output")
+
 func DiscoverGatewayIPv4() (ip net.IP, err error) {
 	ipstr, err := exec.Command("sh", "-c", "route -n get default | grep 'gateway' | awk 'NR==1{print $2}'").CombinedOutput()
 	if err != nil {
