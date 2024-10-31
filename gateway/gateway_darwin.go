@@ -3,6 +3,7 @@
 package gateway
 
 import (
+	"errors"
 	"net"
 	"os/exec"
 )
