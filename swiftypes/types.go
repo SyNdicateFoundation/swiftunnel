@@ -3,6 +3,8 @@ package swiftypes
 import (
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 )
 
 type DNSConfig struct {
@@ -46,4 +48,33 @@ func NewLUID(luid uint64) LUID {
 		LowPart:  uint32(luid),
 		HighPart: int32(luid >> 32),
 	}
+}
+
+func ParseGUID(guid string) (result GUID, err error) {
+	parts := strings.Split(guid, "-")
+	if len(parts) != 5 {
+		return result, fmt.Errorf("invalid GUID format: %q", guid)
+	}
+
+	var (
+		data1, _ = strconv.ParseUint(parts[0], 16, 32)
+		data2, _ = strconv.ParseUint(parts[1], 16, 16)
+		data3, _ = strconv.ParseUint(parts[2], 16, 16)
+		data4    = make([]byte, 8)
+	)
+
+	for i, b := range []string{parts[3], parts[4]} {
+		v, _ := strconv.ParseUint(b, 16, 8)
+		data4[i*2] = byte(v >> 8)
+		data4[i*2+1] = byte(v)
+	}
+
+	result = GUID{
+		Data1: uint32(data1),
+		Data2: uint16(data2),
+		Data3: uint16(data3),
+		Data4: [8]byte(data4),
+	}
+
+	return result, nil
 }
