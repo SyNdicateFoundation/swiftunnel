@@ -170,7 +170,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 		}
 	}
 
-	if config.DNSConfig != swiftypes.NilDNSConfig {
+	if config.DNSConfig != nil {
 		if err = adapter.SetDNS(config.DNSConfig); err != nil {
 			return nil, err
 		}

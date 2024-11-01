@@ -14,7 +14,6 @@ type DNSConfig struct {
 
 var NilGUID = GUID{}
 var NilLUID = LUID{}
-var NilDNSConfig = &DNSConfig{}
 
 type AdapterType int
 
