@@ -28,11 +28,11 @@ type SwiftService interface {
 	GetAdapterGUID() (swiftypes.GUID, error)
 }
 
-type WindowsAdapter struct {
+type SwfitInterface struct {
 	service SwiftService
 }
 
-func (w *WindowsAdapter) Write(buf []byte) (int, error) {
+func (w *SwfitInterface) Write(buf []byte) (int, error) {
 	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
@@ -40,7 +40,7 @@ func (w *WindowsAdapter) Write(buf []byte) (int, error) {
 	return w.service.Write(buf)
 }
 
-func (w *WindowsAdapter) Read(buf []byte) (int, error) {
+func (w *SwfitInterface) Read(buf []byte) (int, error) {
 	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
@@ -48,7 +48,7 @@ func (w *WindowsAdapter) Read(buf []byte) (int, error) {
 	return w.service.Read(buf)
 }
 
-func (w *WindowsAdapter) Close() error {
+func (w *SwfitInterface) Close() error {
 	if w.service == nil {
 		return ErrCannotFindAdapter
 	}
@@ -56,7 +56,7 @@ func (w *WindowsAdapter) Close() error {
 	return w.service.Close()
 }
 
-func (w *WindowsAdapter) File() *os.File {
+func (w *SwfitInterface) File() *os.File {
 	if w.service == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (w *WindowsAdapter) File() *os.File {
 	return w.service.File()
 }
 
-func (w *WindowsAdapter) GetAdapterName() (string, error) {
+func (w *SwfitInterface) GetAdapterName() (string, error) {
 	if w.service == nil {
 		return "", ErrCannotFindAdapter
 	}
@@ -72,7 +72,7 @@ func (w *WindowsAdapter) GetAdapterName() (string, error) {
 	return w.service.GetAdapterName()
 }
 
-func (w *WindowsAdapter) GetAdapterIndex() (uint32, error) {
+func (w *SwfitInterface) GetAdapterIndex() (uint32, error) {
 	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
@@ -80,7 +80,7 @@ func (w *WindowsAdapter) GetAdapterIndex() (uint32, error) {
 	return w.service.GetAdapterIndex()
 }
 
-func (w *WindowsAdapter) SetMTU(mtu int) error {
+func (w *SwfitInterface) SetMTU(mtu int) error {
 	adapterIndex, err := w.GetAdapterIndex()
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (w *WindowsAdapter) SetMTU(mtu int) error {
 	return setMTU(adapterIndex, mtu)
 }
 
-func (w *WindowsAdapter) SetUnicastIpAddressEntry(entry *net.IPNet) error {
+func (w *SwfitInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	luid, err := w.GetAdapterLUID()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (w *WindowsAdapter) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(luid, entry, IpDadStatePreferred)
 }
 
-func (w *WindowsAdapter) SetDNS(config *swiftypes.DNSConfig) error {
+func (w *SwfitInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	guid, err := w.GetAdapterGUID()
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (w *WindowsAdapter) SetDNS(config *swiftypes.DNSConfig) error {
 	return setDNS(guid, config)
 }
 
-func (w *WindowsAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
+func (w *SwfitInterface) GetAdapterLUID() (swiftypes.LUID, error) {
 	if w.service == nil {
 		return swiftypes.NilLUID, ErrCannotFindAdapter
 	}
@@ -115,7 +115,7 @@ func (w *WindowsAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
 	return w.service.GetAdapterLUID()
 }
 
-func (w *WindowsAdapter) GetAdapterGUID() (swiftypes.GUID, error) {
+func (w *SwfitInterface) GetAdapterGUID() (swiftypes.GUID, error) {
 	if w.service == nil {
 		return swiftypes.NilGUID, ErrCannotFindAdapter
 	}
@@ -123,8 +123,8 @@ func (w *WindowsAdapter) GetAdapterGUID() (swiftypes.GUID, error) {
 	return w.service.GetAdapterGUID()
 }
 
-func NewSwiftAdapter(config Config) (*WindowsAdapter, error) {
-	adapter := &WindowsAdapter{}
+func NewSwiftInterface(config Config) (*SwfitInterface, error) {
+	adapter := &SwfitInterface{}
 	var err error
 
 	switch config.DriverType {

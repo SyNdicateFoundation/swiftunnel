@@ -25,13 +25,13 @@ type ifReq struct {
 	_     [0x28 - 0x10 - 2]byte // Padding to match struct size
 }
 
-type LinuxAdapter struct {
+type SwfitInterface struct {
 	name        string
 	file        *os.File
 	AdapterType swiftypes.AdapterType
 }
 
-func (a *LinuxAdapter) initializeAdapter(config Config, fd uintptr) (string, error) {
+func (a *SwfitInterface) initializeAdapter(config Config, fd uintptr) (string, error) {
 	flags := cIFFNOPI
 	if config.AdapterType == swiftypes.AdapterTypeTUN {
 		flags |= cIFFTUN
@@ -55,7 +55,7 @@ func (a *LinuxAdapter) initializeAdapter(config Config, fd uintptr) (string, err
 	return ifName, nil
 }
 
-func (a *LinuxAdapter) createInterface(fd uintptr, ifName string, flags uint16) (string, error) {
+func (a *SwfitInterface) createInterface(fd uintptr, ifName string, flags uint16) (string, error) {
 	var req ifReq
 	req.Flags = flags
 	copy(req.Name[:], ifName)
@@ -67,7 +67,7 @@ func (a *LinuxAdapter) createInterface(fd uintptr, ifName string, flags uint16) 
 	return strings.TrimRight(string(req.Name[:]), "\x00"), nil
 }
 
-func (a *LinuxAdapter) setDeviceOptions(fd uintptr, config Config) error {
+func (a *SwfitInterface) setDeviceOptions(fd uintptr, config Config) error {
 	if config.Permissions != nil {
 		if err := ioctl(fd, syscall.TUNSETOWNER, uintptr(config.Permissions.Owner)); err != nil {
 			return err
@@ -92,18 +92,18 @@ func ioctl(fd uintptr, request uintptr, argp uintptr) error {
 	return nil
 }
 
-func (a *LinuxAdapter) File() *os.File {
+func (a *SwfitInterface) File() *os.File {
 	return a.file
 }
 
-func (a *LinuxAdapter) GetAdapterName() (string, error) {
+func (a *SwfitInterface) GetAdapterName() (string, error) {
 	if a.name == "" {
 		return "", errors.New("adapter name is not set")
 	}
 	return a.name, nil
 }
 
-func (a *LinuxAdapter) GetAdapterIndex() (uint32, error) {
+func (a *SwfitInterface) GetAdapterIndex() (uint32, error) {
 	if a.name == "" {
 		return 0, errors.New("adapter name is not set")
 	}
@@ -116,21 +116,21 @@ func (a *LinuxAdapter) GetAdapterIndex() (uint32, error) {
 	return uint32(ifi.Index), nil
 }
 
-func (a *LinuxAdapter) SetMTU(mtu int) error {
+func (a *SwfitInterface) SetMTU(mtu int) error {
 	return setMTU(a.name, mtu)
 }
 
-func (a *LinuxAdapter) SetUnicastIpAddressEntry(entry *net.IPNet) error {
+func (a *SwfitInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(a.name, entry)
 }
 
-func NewSwiftAdapter(config Config) (*LinuxAdapter, error) {
+func NewSwiftInterface(config Config) (*SwfitInterface, error) {
 	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	adapter := &LinuxAdapter{
+	adapter := &SwfitInterface{
 		AdapterType: config.AdapterType,
 		file:        os.NewFile(uintptr(fd), "tun"),
 	}
