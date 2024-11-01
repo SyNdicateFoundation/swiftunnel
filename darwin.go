@@ -16,7 +16,7 @@ import (
 	"unsafe"
 )
 
-type SwfitInterface struct {
+type SwifttInterface struct {
 	*tunReadCloser
 	name        string
 	AdapterType swiftypes.AdapterType
@@ -38,7 +38,7 @@ type sockaddrCtl struct {
 	scReserved [5]uint32
 }
 
-func openDevSystem(config Config) (*SwfitInterface, error) {
+func openDevSystem(config Config) (*SwifttInterface, error) {
 	if config.AdapterType != swiftypes.AdapterTypeTUN {
 		return nil, errors.New("only TUN is supported for SystemDriver; use TunTapOSXDriver for TAP")
 	}
@@ -80,7 +80,7 @@ func openDevSystem(config Config) (*SwfitInterface, error) {
 		return nil, fmt.Errorf("error getting interface name: %w", err)
 	}
 
-	return &SwfitInterface{
+	return &SwifttInterface{
 		name:        ifName,
 		AdapterType: config.AdapterType,
 		tunReadCloser: &tunReadCloser{
@@ -102,7 +102,7 @@ func parseUtunIndex(name string) (int, error) {
 	return index, nil
 }
 
-func openDevTunTapOSX(config Config) (*SwfitInterface, error) {
+func openDevTunTapOSX(config Config) (*SwifttInterface, error) {
 	if len(config.AdapterName) >= maxAdapterNameLen {
 		return nil, errors.New("device name is too long")
 	}
@@ -124,7 +124,7 @@ func openDevTunTapOSX(config Config) (*SwfitInterface, error) {
 		return nil, err
 	}
 
-	return &SwfitInterface{
+	return &SwifttInterface{
 		name:        config.AdapterName,
 		AdapterType: config.AdapterType,
 		tunReadCloser: &tunReadCloser{
@@ -225,18 +225,18 @@ func (t *tunReadCloser) Close() error {
 	return t.f.Close()
 }
 
-func (a *SwfitInterface) File() *os.File {
+func (a *SwifttInterface) File() *os.File {
 	return a.tunReadCloser.f
 }
 
-func (a *SwfitInterface) GetAdapterName() (string, error) {
+func (a *SwifttInterface) GetAdapterName() (string, error) {
 	if a.name == "" {
 		return "", errors.New("adapter name is not set")
 	}
 	return a.name, nil
 }
 
-func (a *SwfitInterface) GetAdapterIndex() (uint32, error) {
+func (a *SwifttInterface) GetAdapterIndex() (uint32, error) {
 	if a.name == "" {
 		return 0, errors.New("adapter name is not set")
 	}
@@ -249,15 +249,15 @@ func (a *SwfitInterface) GetAdapterIndex() (uint32, error) {
 	return uint32(ifi.Index), nil
 }
 
-func (a *SwfitInterface) SetMTU(mtu int) error {
+func (a *SwifttInterface) SetMTU(mtu int) error {
 	return setMTU(a.name, mtu)
 }
 
-func (a *SwfitInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
+func (a *SwifttInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(a.name, entry)
 }
 
-func NewSwiftInterface(config Config) (*SwfitInterface, error) {
+func NewSwiftInterface(config Config) (*SwifttInterface, error) {
 	switch config.DriverType {
 	case DriverTypeTunTapOSX:
 		osx, err := openDevTunTapOSX(config)
