@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -141,7 +140,6 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	adapter.name = adapterName
 
 	if config.UnicastIP != nil {
-		log.Printf("Setting unicast IP address: %v", config.UnicastIP)
 		if err = adapter.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
 			adapter.Close()
 			return nil, err

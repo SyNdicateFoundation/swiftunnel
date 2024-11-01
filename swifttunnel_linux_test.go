@@ -4,7 +4,6 @@ package swiftunnel
 
 import (
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
-	"log"
 	"net"
 	"testing"
 )
@@ -17,16 +16,12 @@ func TestNewSwiftInterface(t *testing.T) {
 		UnicastIP:   &net.IPNet{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(24, 32)},
 	}
 
-	log.Printf("Config: %v", config)
-
 	// Create a new SwiftInterface
 	adapter, err := NewSwiftInterface(config)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	defer adapter.Close()
-
-	log.Printf("Name: %v", adapter.name)
 
 	// Check if the adapter name is set correctly
 	name, err := adapter.GetAdapterName()
