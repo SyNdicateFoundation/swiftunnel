@@ -15,7 +15,7 @@ var (
 	ErrCannotFindAdapter = errors.New("cannot find adapter")
 )
 
-type SwiftService interface {
+type swiftService interface {
 	Write(buf []byte) (int, error)
 	Read(buf []byte) (int, error)
 	Close() error
@@ -29,7 +29,7 @@ type SwiftService interface {
 }
 
 type SwfitInterface struct {
-	service SwiftService
+	service swiftService
 }
 
 func (w *SwfitInterface) Write(buf []byte) (int, error) {
