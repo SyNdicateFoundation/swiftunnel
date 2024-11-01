@@ -261,7 +261,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	switch config.DriverType {
 	case DriverTypeTunTapOSX:
 		osx, err := openDevTunTapOSX(config)
-		if config.UnicastIP.IP == nil {
+		if config.UnicastIP == nil {
 			if err = osx.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
 				return nil, err
 			}
@@ -276,7 +276,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 		return osx, err
 	case DriverTypeSystem:
 		system, err := openDevSystem(config)
-		if config.UnicastIP.IP == nil {
+		if config.UnicastIP == nil {
 			if err = system.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
 				return nil, err
 			}

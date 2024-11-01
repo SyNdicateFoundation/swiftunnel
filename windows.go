@@ -139,13 +139,13 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 		adapter.service, err = adap.StartSession(0x800000)
 
-		if config.UnicastIP.IP != nil {
+		if config.UnicastIP != nil {
 			if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
 				return nil, err
 			}
 		}
 	case DriverTypeOpenVPN:
-		if config.UnicastIP.IP == nil {
+		if config.UnicastIP == nil {
 			return nil, errors.New("unicast IP not specified")
 		}
 
