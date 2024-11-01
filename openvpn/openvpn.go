@@ -64,7 +64,7 @@ func (a *OpenVPNAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
 	return luid, nil
 }
 
-func NewOpenVPNAdapter(componentID swiftypes.GUID, name string, localIP net.IP, remoteNet net.IPNet, tun bool) (*OpenVPNAdapter, error) {
+func NewOpenVPNAdapter(componentID swiftypes.GUID, name string, localIP net.IP, remoteNet *net.IPNet, tun bool) (*OpenVPNAdapter, error) {
 	deviceID, err := getDeviceID(name, componentID)
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func setStatus(fd *os.File, status bool) error {
 	return windows.DeviceIoControl(windows.Handle(fd.Fd()), tapIoctlSetMediaStatus, &code[0], 4, nil, 0, &bytesReturned, nil)
 }
 
-func setTUN(fd *os.File, localIP net.IP, remoteNet net.IPNet) error {
+func setTUN(fd *os.File, localIP net.IP, remoteNet *net.IPNet) error {
 	if localIP.To4() == nil {
 		return fmt.Errorf("invalid IPv4 address: %s", localIP)
 	}

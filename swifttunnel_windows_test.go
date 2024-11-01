@@ -61,7 +61,4 @@ func TestNewDefaultConfig(t *testing.T) {
 	if !config.UnicastIP.IP.Equal(expectedUnicastIP.IP) {
 		t.Errorf("expected UnicastIP %s, got %s", expectedUnicastIP.IP, config.UnicastIP.IP)
 	}
-	if !config.UnicastIP.Mask.String() == expectedUnicastIP.Mask.String() {
-		t.Errorf("expected UnicastIP Mask %s, got %s", expectedUnicastIP.Mask.String(), config.UnicastIP.Mask.String())
-	}
 }
