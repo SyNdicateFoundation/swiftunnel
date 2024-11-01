@@ -1,10 +1,10 @@
 //go:build linux
 
-package swifttunnel
+package Swiftunnel
 
 import (
 	"errors"
-	"github.com/XenonCommunity/swifttunnel/swiftypes"
+	"github.com/XenonCommunity/Swiftunnel/swiftypes"
 	"net"
 	"os"
 	"strings"
@@ -25,13 +25,13 @@ type ifReq struct {
 	_     [0x28 - 0x10 - 2]byte // Padding to match struct size
 }
 
-type SwifttInterface struct {
+type SwiftInterface struct {
 	name        string
 	file        *os.File
 	AdapterType swiftypes.AdapterType
 }
 
-func (a *SwifttInterface) initializeAdapter(config Config, fd uintptr) (string, error) {
+func (a *SwiftInterface) initializeAdapter(config Config, fd uintptr) (string, error) {
 	flags := cIFFNOPI
 	if config.AdapterType == swiftypes.AdapterTypeTUN {
 		flags |= cIFFTUN
@@ -55,7 +55,7 @@ func (a *SwifttInterface) initializeAdapter(config Config, fd uintptr) (string, 
 	return ifName, nil
 }
 
-func (a *SwifttInterface) createInterface(fd uintptr, ifName string, flags uint16) (string, error) {
+func (a *SwiftInterface) createInterface(fd uintptr, ifName string, flags uint16) (string, error) {
 	var req ifReq
 	req.Flags = flags
 	copy(req.Name[:], ifName)
@@ -67,7 +67,7 @@ func (a *SwifttInterface) createInterface(fd uintptr, ifName string, flags uint1
 	return strings.TrimRight(string(req.Name[:]), "\x00"), nil
 }
 
-func (a *SwifttInterface) setDeviceOptions(fd uintptr, config Config) error {
+func (a *SwiftInterface) setDeviceOptions(fd uintptr, config Config) error {
 	if config.Permissions != nil {
 		if err := ioctl(fd, syscall.TUNSETOWNER, uintptr(config.Permissions.Owner)); err != nil {
 			return err
@@ -92,18 +92,18 @@ func ioctl(fd uintptr, request uintptr, argp uintptr) error {
 	return nil
 }
 
-func (a *SwifttInterface) File() *os.File {
+func (a *SwiftInterface) File() *os.File {
 	return a.file
 }
 
-func (a *SwifttInterface) GetAdapterName() (string, error) {
+func (a *SwiftInterface) GetAdapterName() (string, error) {
 	if a.name == "" {
 		return "", errors.New("adapter name is not set")
 	}
 	return a.name, nil
 }
 
-func (a *SwifttInterface) GetAdapterIndex() (uint32, error) {
+func (a *SwiftInterface) GetAdapterIndex() (uint32, error) {
 	if a.name == "" {
 		return 0, errors.New("adapter name is not set")
 	}
@@ -116,33 +116,33 @@ func (a *SwifttInterface) GetAdapterIndex() (uint32, error) {
 	return uint32(ifi.Index), nil
 }
 
-func (a *SwifttInterface) SetMTU(mtu int) error {
+func (a *SwiftInterface) SetMTU(mtu int) error {
 	return setMTU(a.name, mtu)
 }
 
-func (a *SwifttInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
+func (a *SwiftInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(a.name, entry)
 }
 
-func (a *SwifttInterface) Close() error {
+func (a *SwiftInterface) Close() error {
 	return a.file.Close()
 }
 
-func (a *SwifttInterface) Write(buf []byte) (int, error) {
+func (a *SwiftInterface) Write(buf []byte) (int, error) {
 	return a.file.Write(buf)
 }
 
-func (a *SwifttInterface) Read(buf []byte) (int, error) {
+func (a *SwiftInterface) Read(buf []byte) (int, error) {
 	return a.file.Read(buf)
 }
 
-func NewSwiftInterface(config Config) (*SwifttInterface, error) {
+func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	adapter := &SwifttInterface{
+	adapter := &SwiftInterface{
 		AdapterType: config.AdapterType,
 		file:        os.NewFile(uintptr(fd), "tun"),
 	}

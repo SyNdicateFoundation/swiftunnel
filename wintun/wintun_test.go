@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"github.com/XenonCommunity/swifttunnel/swiftypes"
+	"github.com/XenonCommunity/Swiftunnel/swiftypes"
 	"testing"
 	"time"
 )

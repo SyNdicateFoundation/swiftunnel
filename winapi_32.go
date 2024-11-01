@@ -1,6 +1,6 @@
 //go:build windows && (386 || arm)
 
-package swifttunnel
+package Swiftunnel
 
 type mibUnicastIPAddressRow struct {
 	Address            sockaddrInet

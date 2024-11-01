@@ -1,9 +1,9 @@
 //go:build windows
 
-package swifttunnel
+package Swiftunnel
 
 import (
-	"github.com/XenonCommunity/swifttunnel/swiftypes"
+	"github.com/XenonCommunity/Swiftunnel/swiftypes"
 	"net"
 )
 
@@ -28,8 +28,8 @@ type Config struct {
 
 func NewDefaultConfig() Config {
 	return Config{
-		AdapterName:     "SwiftTunnel VPN",
-		AdapterTypeName: "SwiftTunnel",
+		AdapterName:     "Swiftunnel VPN",
+		AdapterTypeName: "Swiftunnel",
 		AdapterType:     swiftypes.AdapterTypeTUN,
 		DriverType:      DriverTypeWintun,
 		MTU:             1500,

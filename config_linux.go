@@ -1,9 +1,9 @@
 //go:build linux
 
-package swifttunnel
+package Swiftunnel
 
 import (
-	"github.com/XenonCommunity/swifttunnel/swiftypes"
+	"github.com/XenonCommunity/Swiftunnel/swiftypes"
 	"net"
 )
 
@@ -30,7 +30,7 @@ func NewPermissions(owner, group uint) *Permissions {
 
 func NewDefaultConfig() Config {
 	return Config{
-		AdapterName: "SwiftTunnel VPN",
+		AdapterName: "Swiftunnel VPN",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,
 		UnicastIP: net.IPNet{

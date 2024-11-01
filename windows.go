@@ -1,12 +1,12 @@
 //go:build windows
 
-package swifttunnel
+package Swiftunnel
 
 import (
 	"errors"
-	"github.com/XenonCommunity/swifttunnel/openvpn"
-	"github.com/XenonCommunity/swifttunnel/swiftypes"
-	"github.com/XenonCommunity/swifttunnel/wintun"
+	"github.com/XenonCommunity/Swiftunnel/openvpn"
+	"github.com/XenonCommunity/Swiftunnel/swiftypes"
+	"github.com/XenonCommunity/Swiftunnel/wintun"
 	"net"
 	"os"
 )
@@ -28,11 +28,11 @@ type swiftService interface {
 	GetAdapterGUID() (swiftypes.GUID, error)
 }
 
-type SwifttInterface struct {
+type SwiftInterface struct {
 	service swiftService
 }
 
-func (w *SwifttInterface) Write(buf []byte) (int, error) {
+func (w *SwiftInterface) Write(buf []byte) (int, error) {
 	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
@@ -40,7 +40,7 @@ func (w *SwifttInterface) Write(buf []byte) (int, error) {
 	return w.service.Write(buf)
 }
 
-func (w *SwifttInterface) Read(buf []byte) (int, error) {
+func (w *SwiftInterface) Read(buf []byte) (int, error) {
 	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
@@ -48,7 +48,7 @@ func (w *SwifttInterface) Read(buf []byte) (int, error) {
 	return w.service.Read(buf)
 }
 
-func (w *SwifttInterface) Close() error {
+func (w *SwiftInterface) Close() error {
 	if w.service == nil {
 		return ErrCannotFindAdapter
 	}
@@ -56,7 +56,7 @@ func (w *SwifttInterface) Close() error {
 	return w.service.Close()
 }
 
-func (w *SwifttInterface) File() *os.File {
+func (w *SwiftInterface) File() *os.File {
 	if w.service == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (w *SwifttInterface) File() *os.File {
 	return w.service.File()
 }
 
-func (w *SwifttInterface) GetAdapterName() (string, error) {
+func (w *SwiftInterface) GetAdapterName() (string, error) {
 	if w.service == nil {
 		return "", ErrCannotFindAdapter
 	}
@@ -72,7 +72,7 @@ func (w *SwifttInterface) GetAdapterName() (string, error) {
 	return w.service.GetAdapterName()
 }
 
-func (w *SwifttInterface) GetAdapterIndex() (uint32, error) {
+func (w *SwiftInterface) GetAdapterIndex() (uint32, error) {
 	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
@@ -80,7 +80,7 @@ func (w *SwifttInterface) GetAdapterIndex() (uint32, error) {
 	return w.service.GetAdapterIndex()
 }
 
-func (w *SwifttInterface) SetMTU(mtu int) error {
+func (w *SwiftInterface) SetMTU(mtu int) error {
 	adapterIndex, err := w.GetAdapterIndex()
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (w *SwifttInterface) SetMTU(mtu int) error {
 	return setMTU(adapterIndex, mtu)
 }
 
-func (w *SwifttInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
+func (w *SwiftInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	luid, err := w.GetAdapterLUID()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (w *SwifttInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(luid, entry, IpDadStatePreferred)
 }
 
-func (w *SwifttInterface) SetDNS(config *swiftypes.DNSConfig) error {
+func (w *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	guid, err := w.GetAdapterGUID()
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (w *SwifttInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	return setDNS(guid, config)
 }
 
-func (w *SwifttInterface) GetAdapterLUID() (swiftypes.LUID, error) {
+func (w *SwiftInterface) GetAdapterLUID() (swiftypes.LUID, error) {
 	if w.service == nil {
 		return swiftypes.NilLUID, ErrCannotFindAdapter
 	}
@@ -115,7 +115,7 @@ func (w *SwifttInterface) GetAdapterLUID() (swiftypes.LUID, error) {
 	return w.service.GetAdapterLUID()
 }
 
-func (w *SwifttInterface) GetAdapterGUID() (swiftypes.GUID, error) {
+func (w *SwiftInterface) GetAdapterGUID() (swiftypes.GUID, error) {
 	if w.service == nil {
 		return swiftypes.NilGUID, ErrCannotFindAdapter
 	}
@@ -123,8 +123,8 @@ func (w *SwifttInterface) GetAdapterGUID() (swiftypes.GUID, error) {
 	return w.service.GetAdapterGUID()
 }
 
-func NewSwiftInterface(config Config) (*SwifttInterface, error) {
-	adapter := &SwifttInterface{}
+func NewSwiftInterface(config Config) (*SwiftInterface, error) {
+	adapter := &SwiftInterface{}
 	var err error
 
 	switch config.DriverType {

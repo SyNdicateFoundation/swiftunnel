@@ -1,6 +1,6 @@
 //go:build windows
 
-package swifttunnel
+package Swiftunnel
 
 type DadState uint32
 
