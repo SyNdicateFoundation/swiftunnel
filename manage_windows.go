@@ -90,12 +90,12 @@ func setDNS(guid swiftypes.GUID, config *swiftypes.DNSConfig) error {
 	}
 
 	if len(config.DnsServers) > 0 {
-		var servers strings.Builder
+		var servers []string
 		for _, server := range config.DnsServers {
-			servers.WriteString(server.String())
+			servers = append(servers, server.String())
 		}
 
-		fromString, err := windows.UTF16PtrFromString(servers.String())
+		fromString, err := windows.UTF16PtrFromString(strings.Join(servers, ","))
 		if err != nil {
 			return err
 		}
