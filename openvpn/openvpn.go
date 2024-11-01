@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/XenonCommunity/swifttunnel/swiftypes"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 	"net"
 	"os"
 	"syscall"
+	"unsafe"
 )
 
 const (
@@ -19,15 +21,15 @@ const (
 )
 
 var (
-	errIfceNameNotFound    = errors.New("failed to find the name of interface")
-	fileDeviceUnknown      = uint32(0x00000022)
-	tapWinIoctlGetMac      = tapControlCode(1, 0)
-	tapIoctlSetMediaStatus = tapControlCode(6, 0)
-	tapIoctlConfigTun      = tapControlCode(10, 0)
+	errIfceNameNotFound        = errors.New("failed to find the name of interface")
+	fileDeviceUnknown          = uint32(0x00000022)
+	tapWinIoctlGetMac          = tapControlCode(1, 0)
+	tapIoctlSetMediaStatus     = tapControlCode(6, 0)
+	tapIoctlConfigTun          = tapControlCode(10, 0)
+	iphlpapi                   = syscall.NewLazyDLL("iphlpapi.dll")
+	convertInterfaceGuidToLuid = iphlpapi.NewProc("ConvertInterfaceGuidToLuid")
 )
 
-// OpenVPNAdapter manages the TAP device interface on Windows.
-//
 //goland:noinspection GoNameStartsWithPackageName
 type OpenVPNAdapter struct {
 	file *os.File
@@ -42,32 +44,40 @@ func (a *OpenVPNAdapter) File() *os.File                          { return a.fil
 func (a *OpenVPNAdapter) GetAdapterName() (string, error)         { return a.name, nil }
 func (a *OpenVPNAdapter) GetAdapterGUID() (swiftypes.GUID, error) { return a.guid, nil }
 
-func (a *OpenVPNAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
-	// TODO implement
-	return swiftypes.NilLUID, nil
-}
-
 func (a *OpenVPNAdapter) GetAdapterIndex() (uint32, error) {
-	// TODO implement
-	return 0, nil
+	ifce, err := net.InterfaceByName(a.name)
+	if err != nil {
+		return 0, fmt.Errorf("unable to retrieve adapter index: %w", err)
+	}
+	return uint32(ifce.Index), nil
 }
 
-// NewOpenVPNAdapter creates and configures an OpenVPNAdapter instance.
+func (a *OpenVPNAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
+	var luid swiftypes.LUID
+	_, _, err := convertInterfaceGuidToLuid.Call(
+		uintptr(unsafe.Pointer(&a.guid)),
+		uintptr(unsafe.Pointer(&luid)),
+	)
+	if err != nil && !errors.Is(err, windows.NOERROR) {
+		return swiftypes.LUID{}, fmt.Errorf("failed to get adapter LUID: %w", err)
+	}
+	return luid, nil
+}
+
 func NewOpenVPNAdapter(componentID swiftypes.GUID, name string, localIP net.IP, remoteNet net.IPNet, tun bool) (*OpenVPNAdapter, error) {
 	deviceID, err := getDeviceID(name, componentID)
 	if err != nil {
 		return nil, err
 	}
+	path := `\\.\Global\` + deviceID + `.tap`
 
-	path := `\\.\Global\` + deviceID + ".tap"
 	fd, err := openTapDevice(path)
 	if err != nil {
 		return nil, err
 	}
-
 	defer func() {
 		if err != nil {
-			fd.Close()
+			_ = fd.Close()
 		}
 	}()
 
@@ -77,22 +87,16 @@ func NewOpenVPNAdapter(componentID swiftypes.GUID, name string, localIP net.IP, 
 	}
 
 	adapter := &OpenVPNAdapter{file: fd, guid: componentID}
-
 	if err := setStatus(fd, true); err != nil {
 		return nil, err
 	}
-
 	if tun {
 		if err := setTUN(fd, localIP, remoteNet); err != nil {
 			return nil, err
 		}
 	}
-
-	if adapter.name, err = findInterfaceName(mac); err != nil {
-		return nil, err
-	}
-
-	return adapter, nil
+	adapter.name, err = findInterfaceName(mac)
+	return adapter, err
 }
 
 func openTapDevice(path string) (*os.File, error) {
@@ -165,7 +169,7 @@ func findDeviceByID(subKey, name string, componentID swiftypes.GUID) (string, er
 func getMacAddress(fd *os.File) ([]byte, error) {
 	mac := make([]byte, 6)
 	var bytesReturned uint32
-	err := syscall.DeviceIoControl(syscall.Handle(fd.Fd()), tapWinIoctlGetMac, &mac[0], uint32(len(mac)), &mac[0], uint32(len(mac)), &bytesReturned, nil)
+	err := windows.DeviceIoControl(windows.Handle(fd.Fd()), tapWinIoctlGetMac, &mac[0], uint32(len(mac)), &mac[0], uint32(len(mac)), &bytesReturned, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -177,21 +181,18 @@ func setStatus(fd *os.File, status bool) error {
 	if status {
 		code[0] = 0x01
 	}
-
 	var bytesReturned uint32
-	return syscall.DeviceIoControl(syscall.Handle(fd.Fd()), tapIoctlSetMediaStatus, &code[0], 4, nil, 0, &bytesReturned, nil)
+	return windows.DeviceIoControl(windows.Handle(fd.Fd()), tapIoctlSetMediaStatus, &code[0], 4, nil, 0, &bytesReturned, nil)
 }
 
 func setTUN(fd *os.File, localIP net.IP, remoteNet net.IPNet) error {
 	if localIP.To4() == nil {
 		return fmt.Errorf("invalid IPv4 address: %s", localIP)
 	}
-
 	data := append(localIP.To4(), remoteNet.IP.To4()...)
 	data = append(data, remoteNet.Mask...)
-
 	var bytesReturned uint32
-	return syscall.DeviceIoControl(syscall.Handle(fd.Fd()), tapIoctlConfigTun, &data[0], 12, nil, 0, &bytesReturned, nil)
+	return windows.DeviceIoControl(windows.Handle(fd.Fd()), tapIoctlConfigTun, &data[0], 12, nil, 0, &bytesReturned, nil)
 }
 
 func findInterfaceName(mac []byte) (string, error) {
@@ -199,7 +200,6 @@ func findInterfaceName(mac []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	for _, ifce := range ifces {
 		if len(ifce.HardwareAddr) >= 6 && bytes.Equal(ifce.HardwareAddr[:6], mac) {
 			return ifce.Name, nil

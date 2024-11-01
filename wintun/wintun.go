@@ -112,6 +112,7 @@ type WintunAdapter struct {
 
 //goland:noinspection GoNameStartsWithPackageName
 type WintunSession struct {
+	*WintunAdapter
 	handle    uintptr
 	waitEvent windows.Handle
 }
@@ -203,7 +204,7 @@ func (a *WintunAdapter) StartSession(capacity uint32) (*WintunSession, error) {
 		return nil, fmt.Errorf("failed to create wait event: %v", err)
 	}
 
-	s := &WintunSession{handle: handle, waitEvent: windows.Handle(waitEvent)}
+	s := &WintunSession{handle: handle, waitEvent: windows.Handle(waitEvent), WintunAdapter: a}
 
 	runtime.SetFinalizer(s, func(s *WintunSession) {
 		_ = s.Close()
@@ -303,6 +304,14 @@ func (a *WintunAdapter) GetRunningDriverVersion() (string, error) {
 	return fmt.Sprintf("%d.%d", version>>16&0xff, version&0xff), nil
 }
 
+func (s *WintunAdapter) File() *os.File {
+	return nil
+}
+
+func (s *WintunAdapter) GetAdapterName() (string, error) {
+	return s.name, nil
+}
+
 func (a *WintunAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
 	if a.handle == 0 {
 		return swiftypes.NilLUID, ErrInvalidAdapterHandle
@@ -346,10 +355,6 @@ func (a *WintunAdapter) GetAdapterIndex() (uint32, error) {
 	}
 
 	return index, nil
-}
-
-func (a *WintunAdapter) GetAdapterName() (string, error) {
-	return a.name, nil
 }
 
 func UninstallWintun() {

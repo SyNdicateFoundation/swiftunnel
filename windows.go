@@ -15,78 +15,73 @@ var (
 	ErrCannotFindAdapter = errors.New("cannot find adapter")
 )
 
+type SwiftService interface {
+	Write(buf []byte) (int, error)
+	Read(buf []byte) (int, error)
+	Close() error
+
+	File() *os.File
+
+	GetAdapterName() (string, error)
+	GetAdapterIndex() (uint32, error)
+	GetAdapterLUID() (swiftypes.LUID, error)
+	GetAdapterGUID() (swiftypes.GUID, error)
+}
+
 type WindowsAdapter struct {
-	wintunAdapter *wintun.WintunAdapter
-	wintunSession *wintun.WintunSession
-	ovpn          *openvpn.OpenVPNAdapter
+	service SwiftService
 }
 
 func (w *WindowsAdapter) Write(buf []byte) (int, error) {
-	switch {
-	case w.wintunSession != nil:
-		return w.wintunSession.Write(buf)
-	case w.ovpn != nil:
-		return w.ovpn.Write(buf)
-	default:
+	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
+
+	return w.service.Write(buf)
 }
 
 func (w *WindowsAdapter) Read(buf []byte) (int, error) {
-	switch {
-	case w.wintunSession != nil:
-		return w.wintunSession.Read(buf)
-	case w.ovpn != nil:
-		return w.ovpn.Read(buf)
-	default:
+	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
+
+	return w.service.Read(buf)
 }
 
 func (w *WindowsAdapter) Close() error {
-	switch {
-	case w.wintunSession != nil:
-		return w.wintunSession.Close()
-	case w.ovpn != nil:
-		return w.ovpn.Close()
-	default:
+	if w.service == nil {
 		return ErrCannotFindAdapter
 	}
+
+	return w.service.Close()
 }
 
 func (w *WindowsAdapter) File() *os.File {
-	switch {
-	case w.ovpn != nil:
-		return w.ovpn.File()
-	default:
+	if w.service == nil {
 		return nil
 	}
+
+	return w.service.File()
 }
 
 func (w *WindowsAdapter) GetAdapterName() (string, error) {
-	switch {
-	case w.wintunAdapter != nil:
-		return w.wintunAdapter.GetAdapterName()
-	case w.ovpn != nil:
-		return w.ovpn.GetAdapterName()
-	default:
+	if w.service == nil {
 		return "", ErrCannotFindAdapter
 	}
+
+	return w.service.GetAdapterName()
 }
 
 func (w *WindowsAdapter) GetAdapterIndex() (uint32, error) {
-	switch {
-	case w.wintunAdapter != nil:
-		return w.wintunAdapter.GetAdapterIndex()
-	case w.ovpn != nil:
-		return w.ovpn.GetAdapterIndex()
-	default:
+	if w.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
+
+	return w.service.GetAdapterIndex()
 }
 
-func (w *WindowsAdapter) SetMTU(mtu uint32) error {
-	adapterIndex, err := w.getAdapterIndex()
+func (w *WindowsAdapter) SetMTU(mtu int) error {
+	adapterIndex, err := w.GetAdapterIndex()
 	if err != nil {
 		return err
 	}
@@ -95,7 +90,7 @@ func (w *WindowsAdapter) SetMTU(mtu uint32) error {
 }
 
 func (w *WindowsAdapter) SetUnicastIpAddressEntry(entry *net.IPNet) error {
-	luid, err := w.getAdapterLUID()
+	luid, err := w.GetAdapterLUID()
 	if err != nil {
 		return err
 	}
@@ -104,7 +99,7 @@ func (w *WindowsAdapter) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 }
 
 func (w *WindowsAdapter) SetDNS(config *swiftypes.DNSConfig) error {
-	guid, err := w.getAdapterGUID()
+	guid, err := w.GetAdapterGUID()
 	if err != nil {
 		return err
 	}
@@ -112,77 +107,74 @@ func (w *WindowsAdapter) SetDNS(config *swiftypes.DNSConfig) error {
 	return setDNS(guid, config)
 }
 
-func (w *WindowsAdapter) getAdapterIndex() (uint32, error) {
-	switch {
-	case w.wintunSession != nil:
-		return w.wintunAdapter.GetAdapterIndex()
-	case w.ovpn != nil:
-		return w.ovpn.GetAdapterIndex()
-	default:
-		return 0, ErrCannotFindAdapter
-	}
-}
-
-func (w *WindowsAdapter) getAdapterLUID() (swiftypes.LUID, error) {
-	switch {
-	case w.wintunSession != nil:
-		return w.wintunAdapter.GetAdapterLUID()
-	case w.ovpn != nil:
-		return w.ovpn.GetAdapterLUID()
-	default:
+func (w *WindowsAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
+	if w.service == nil {
 		return swiftypes.NilLUID, ErrCannotFindAdapter
 	}
+
+	return w.service.GetAdapterLUID()
 }
 
-func (w *WindowsAdapter) getAdapterGUID() (swiftypes.GUID, error) {
-	switch {
-	case w.wintunSession != nil:
-		return w.wintunAdapter.GetAdapterGUID()
-	case w.ovpn != nil:
-		return w.ovpn.GetAdapterGUID()
-	default:
+func (w *WindowsAdapter) GetAdapterGUID() (swiftypes.GUID, error) {
+	if w.service == nil {
 		return swiftypes.NilGUID, ErrCannotFindAdapter
 	}
+
+	return w.service.GetAdapterGUID()
 }
 
-func NewWindowsAdapter(config Config) *WindowsAdapter {
+func NewSwiftAdapter(config Config) (*WindowsAdapter, error) {
 	adapter := &WindowsAdapter{}
 	var err error
 
-	switch config.AdapterType {
-	case swiftypes.AdapterTypeTUN:
-		adapter.wintunAdapter, err = wintun.NewWintunAdapterWithGUID(config.AdapterName, "VPN Tunnel", config.AdapterGUID)
-		if err != nil {
-			return nil
+	switch config.DriverType {
+	case DriverTypeWintun:
+		if config.AdapterType == swiftypes.AdapterTypeTAP {
+			return nil, errors.New("TAP adapter not supported on wintun")
 		}
-		adapter.wintunSession, err = adapter.wintunAdapter.StartSession(0x800000)
-	case swiftypes.AdapterTypeTAP:
-		adapter.ovpn, err = openvpn.NewOpenVPNAdapter(config.AdapterGUID, config.AdapterName, config.UnicastIP.IP, config.UnicastIP, false)
+		adap, err := wintun.NewWintunAdapterWithGUID(config.AdapterName, config.AdapterTypeName, config.AdapterGUID)
+		if err != nil {
+			return nil, err
+		}
+
+		adapter.service, err = adap.StartSession(0x800000)
+
+		if !config.UnicastIP.IP.IsUnspecified() {
+			if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
+				return nil, err
+			}
+		}
+	case DriverTypeOpenVPN:
+		if config.UnicastIP.IP.IsUnspecified() {
+			return nil, errors.New("unicast IP not specified")
+		}
+
+		adapter.service, err = openvpn.NewOpenVPNAdapter(
+			config.AdapterGUID,
+			config.AdapterName,
+			config.UnicastIP.IP,
+			config.UnicastIP,
+			config.AdapterType == swiftypes.AdapterTypeTAP,
+		)
 	default:
-		return nil
+		return nil, errors.New("unknown adapter type")
 	}
 
 	if err != nil || adapter == nil {
-		return nil
+		return nil, err
 	}
 
 	if config.MTU != 0 {
 		if err = adapter.SetMTU(config.MTU); err != nil {
-			return nil
-		}
-	}
-
-	if !config.UnicastIP.IP.IsUnspecified() {
-		if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
-			return nil
+			return nil, err
 		}
 	}
 
 	if config.DNSConfig != swiftypes.NilDNSConfig {
 		if err = adapter.SetDNS(config.DNSConfig); err != nil {
-			return nil
+			return nil, err
 		}
 	}
 
-	return adapter
+	return adapter, nil
 }

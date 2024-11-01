@@ -22,7 +22,7 @@ var (
 	procSetIfEntry                      = iphlpapi.NewProc("SetIfEntry")
 )
 
-func setMTU(index uint32, mtu uint32) error {
+func setMTU(index uint32, mtu int) error {
 	var ifRow windows.MibIfRow
 
 	ifRow.Index = index
@@ -32,7 +32,7 @@ func setMTU(index uint32, mtu uint32) error {
 		return fmt.Errorf("failed to retrieve interface entry: %w", err)
 	}
 
-	ifRow.Mtu = mtu
+	ifRow.Mtu = uint32(mtu)
 	ret, _, err = procSetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if ret != 0 {
 		return fmt.Errorf("failed to set MTU: %w", err)

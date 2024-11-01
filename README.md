@@ -40,21 +40,18 @@ func main() {
 		log.Fatalf("Error creating adapter: %v", err)
 	}
 	defer adapter.Close()
-
 	
-	session, err := adapter.StartSession(0x400000) 
+	session, err := adapter.StartSession(0x400000)
 	if err != nil {
 		log.Fatalf("Error starting session: %v", err)
 	}
 	defer session.Close()
-
 	
 	packet := []byte("Hello, Wintun!")
 	err = session.SendPacket(packet)
 	if err != nil {
 		log.Fatalf("Error sending packet: %v", err)
 	}
-
 	
 	receivedPacket, err := session.ReceivePacket()
 	if err != nil {
