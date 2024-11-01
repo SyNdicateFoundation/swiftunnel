@@ -14,7 +14,7 @@ func TestNewSwiftInterface(t *testing.T) {
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,
-		UnicastIP:   net.IPNet{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(24, 32)},
+		UnicastIP:   &net.IPNet{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(24, 32)},
 	}
 
 	log.Printf("Config: %v", config)

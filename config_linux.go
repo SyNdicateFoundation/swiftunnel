@@ -17,7 +17,7 @@ type Config struct {
 	AdapterType swiftypes.AdapterType
 
 	MTU       int
-	UnicastIP net.IPNet
+	UnicastIP *net.IPNet
 
 	MultiQueue  bool
 	Permissions *Permissions
@@ -33,7 +33,7 @@ func NewDefaultConfig() Config {
 		AdapterName: "Swiftunnel VPN",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,
-		UnicastIP: net.IPNet{
+		UnicastIP: &net.IPNet{
 			IP:   net.IPv4(10, 18, 21, 1),
 			Mask: net.IPv4Mask(255, 255, 255, 0),
 		},

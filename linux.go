@@ -142,7 +142,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 	if config.UnicastIP.IP != nil {
 		log.Printf("Setting unicast IP address: %v", config.UnicastIP)
-		if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
+		if err = adapter.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
 			adapter.Close()
 			return nil, err
 		}

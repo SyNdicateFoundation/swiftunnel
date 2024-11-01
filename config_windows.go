@@ -23,7 +23,7 @@ type Config struct {
 
 	MTU       int
 	DNSConfig *swiftypes.DNSConfig
-	UnicastIP net.IPNet
+	UnicastIP *net.IPNet
 }
 
 func NewDefaultConfig() Config {
@@ -39,7 +39,7 @@ func NewDefaultConfig() Config {
 				net.IPv4(8, 8, 4, 4),
 			},
 		},
-		UnicastIP: net.IPNet{
+		UnicastIP: &net.IPNet{
 			IP:   net.IPv4(10, 18, 21, 1),
 			Mask: net.IPv4Mask(255, 255, 255, 0),
 		},
