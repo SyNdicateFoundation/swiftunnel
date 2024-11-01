@@ -5,7 +5,7 @@ package wintun
 import (
 	"errors"
 	"fmt"
-	"github.com/XenonCommunity/Swiftunnel/swiftypes"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"os"
 	"runtime"
 	"sync"

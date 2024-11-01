@@ -1,11 +1,11 @@
 //go:build windows
 
-package Swiftunnel
+package swiftunnel
 
 import (
 	"errors"
 	"fmt"
-	"github.com/XenonCommunity/Swiftunnel/swiftypes"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"golang.org/x/sys/windows"
 	"net"
 	"strings"

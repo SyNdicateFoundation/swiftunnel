@@ -1,11 +1,11 @@
 //go:build darwin
 
-package Swiftunnel
+package swiftunnel
 
 import (
 	"errors"
 	"fmt"
-	"github.com/XenonCommunity/Swiftunnel/swiftypes"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"math"
 	"net"
 	"os"

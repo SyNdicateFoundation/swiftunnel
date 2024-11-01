@@ -1,7 +1,7 @@
-package Swiftunnel
+package swiftunnel
 
 import (
-	"github.com/XenonCommunity/Swiftunnel/swiftypes"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"net"
 )
 

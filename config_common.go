@@ -1,3 +1,3 @@
-package Swiftunnel
+package swiftunnel
 
 var NilConfig = Config{}

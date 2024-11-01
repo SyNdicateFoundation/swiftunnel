@@ -1,10 +1,10 @@
 //go:build linux
 
-package Swiftunnel
+package swiftunnel
 
 import (
 	"errors"
-	"github.com/XenonCommunity/Swiftunnel/swiftypes"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"net"
 	"os"
 	"strings"

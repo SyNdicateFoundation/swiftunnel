@@ -1,12 +1,12 @@
 //go:build windows
 
-package Swiftunnel
+package swiftunnel
 
 import (
 	"errors"
-	"github.com/XenonCommunity/Swiftunnel/openvpn"
-	"github.com/XenonCommunity/Swiftunnel/swiftypes"
-	"github.com/XenonCommunity/Swiftunnel/wintun"
+	"github.com/XenonCommunity/swiftunnel/openvpn"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/XenonCommunity/swiftunnel/wintun"
 	"net"
 	"os"
 )

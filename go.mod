@@ -1,4 +1,4 @@
-module github.com/XenonCommunity/Swiftunnel
+module github.com/XenonCommunity/swiftunnel
 
 go 1.23
 
