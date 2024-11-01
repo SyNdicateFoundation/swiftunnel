@@ -124,6 +124,18 @@ func (a *SwfitInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(a.name, entry)
 }
 
+func (a *SwfitInterface) Close() error {
+	return a.file.Close()
+}
+
+func (a *SwfitInterface) Write(buf []byte) (int, error) {
+	return a.file.Write(buf)
+}
+
+func (a *SwfitInterface) Read(buf []byte) (int, error) {
+	return a.file.Read(buf)
+}
+
 func NewSwiftInterface(config Config) (*SwfitInterface, error) {
 	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR|syscall.O_NONBLOCK, 0)
 	if err != nil {
