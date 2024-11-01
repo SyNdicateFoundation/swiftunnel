@@ -140,7 +140,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 		adapter.service, err = adap.StartSession(0x800000)
 
 		if config.UnicastIP != nil {
-			if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
+			if err = adapter.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
 				return nil, err
 			}
 		}
