@@ -304,7 +304,7 @@ func (a *WintunAdapter) GetRunningDriverVersion() (string, error) {
 	return fmt.Sprintf("%d.%d", version>>16&0xff, version&0xff), nil
 }
 
-func (s *WintunAdapter) File() *os.File {
+func (s *WintunAdapter) GetFD() *os.File {
 	return nil
 }
 

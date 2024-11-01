@@ -225,7 +225,7 @@ func (t *tunReadCloser) Close() error {
 	return t.f.Close()
 }
 
-func (a *SwiftInterface) File() *os.File {
+func (a *SwiftInterface) GetFD() *os.File {
 	return a.tunReadCloser.f
 }
 
@@ -261,7 +261,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	switch config.DriverType {
 	case DriverTypeTunTapOSX:
 		osx, err := openDevTunTapOSX(config)
-		if config.UnicastIP.IP.IsUnspecified() {
+		if config.UnicastIP.IP == nil {
 			if err = osx.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
 				return nil, err
 			}
@@ -276,7 +276,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 		return osx, err
 	case DriverTypeSystem:
 		system, err := openDevSystem(config)
-		if config.UnicastIP.IP.IsUnspecified() {
+		if config.UnicastIP.IP == nil {
 			if err = system.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
 				return nil, err
 			}

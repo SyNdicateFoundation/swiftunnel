@@ -20,7 +20,7 @@ type swiftService interface {
 	Read(buf []byte) (int, error)
 	Close() error
 
-	File() *os.File
+	GetFD() *os.File
 
 	GetAdapterName() (string, error)
 	GetAdapterIndex() (uint32, error)
@@ -56,12 +56,12 @@ func (w *SwiftInterface) Close() error {
 	return w.service.Close()
 }
 
-func (w *SwiftInterface) File() *os.File {
+func (w *SwiftInterface) GetFD() *os.File {
 	if w.service == nil {
 		return nil
 	}
 
-	return w.service.File()
+	return w.service.GetFD()
 }
 
 func (w *SwiftInterface) GetAdapterName() (string, error) {
@@ -139,13 +139,13 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 		adapter.service, err = adap.StartSession(0x800000)
 
-		if !config.UnicastIP.IP.IsUnspecified() {
+		if config.UnicastIP.IP != nil {
 			if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
 				return nil, err
 			}
 		}
 	case DriverTypeOpenVPN:
-		if config.UnicastIP.IP.IsUnspecified() {
+		if config.UnicastIP.IP == nil {
 			return nil, errors.New("unicast IP not specified")
 		}
 

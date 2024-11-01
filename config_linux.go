@@ -37,8 +37,7 @@ func NewDefaultConfig() Config {
 			IP:   net.IPv4(10, 18, 21, 1),
 			Mask: net.IPv4Mask(255, 255, 255, 0),
 		},
-		Permissions: NewPermissions(0, 0),
-		MultiQueue:  false,
-		Persist:     true,
+		MultiQueue: false,
+		Persist:    true,
 	}
 }

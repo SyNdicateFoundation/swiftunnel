@@ -5,6 +5,8 @@ package swiftunnel
 import (
 	"errors"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"io"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -12,38 +14,32 @@ import (
 	"unsafe"
 )
 
-const (
-	cIFFTUN        uint16 = 0x0001
-	cIFFTAP        uint16 = 0x0002
-	cIFFNOPI       uint16 = 0x1000
-	cIFFMULTIQUEUE uint16 = 0x0100
-)
-
 type ifReq struct {
-	Name  [0x10]byte
+	Name  [syscall.IFNAMSIZ]byte
 	Flags uint16
-	_     [0x28 - 0x10 - 2]byte // Padding to match struct size
+	_     [0x28 - 0x10 - 2]byte
 }
 
 type SwiftInterface struct {
+	io.ReadWriteCloser
 	name        string
-	file        *os.File
-	AdapterType swiftypes.AdapterType
+	adapterType swiftypes.AdapterType
 }
 
 func (a *SwiftInterface) initializeAdapter(config Config, fd uintptr) (string, error) {
-	flags := cIFFNOPI
+	flags := syscall.IFF_NO_PI
+
 	if config.AdapterType == swiftypes.AdapterTypeTUN {
-		flags |= cIFFTUN
+		flags |= syscall.IFF_TUN
 	} else {
-		flags |= cIFFTAP
+		flags |= syscall.IFF_TAP
 	}
 
 	if config.MultiQueue {
-		flags |= cIFFMULTIQUEUE
+		flags |= syscall.IFF_PROMISC
 	}
 
-	ifName, err := a.createInterface(fd, config.AdapterName, flags)
+	ifName, err := a.createInterface(fd, config.AdapterName, uint16(flags))
 	if err != nil {
 		return "", err
 	}
@@ -57,6 +53,7 @@ func (a *SwiftInterface) initializeAdapter(config Config, fd uintptr) (string, e
 
 func (a *SwiftInterface) createInterface(fd uintptr, ifName string, flags uint16) (string, error) {
 	var req ifReq
+
 	req.Flags = flags
 	copy(req.Name[:], ifName)
 
@@ -92,8 +89,8 @@ func ioctl(fd uintptr, request uintptr, argp uintptr) error {
 	return nil
 }
 
-func (a *SwiftInterface) File() *os.File {
-	return a.file
+func (a *SwiftInterface) GetFD() *os.File {
+	return a.ReadWriteCloser.(*os.File)
 }
 
 func (a *SwiftInterface) GetAdapterName() (string, error) {
@@ -124,18 +121,6 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
 	return setUnicastIpAddressEntry(a.name, entry)
 }
 
-func (a *SwiftInterface) Close() error {
-	return a.file.Close()
-}
-
-func (a *SwiftInterface) Write(buf []byte) (int, error) {
-	return a.file.Write(buf)
-}
-
-func (a *SwiftInterface) Read(buf []byte) (int, error) {
-	return a.file.Read(buf)
-}
-
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR|syscall.O_NONBLOCK, 0)
 	if err != nil {
@@ -143,28 +128,29 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	}
 
 	adapter := &SwiftInterface{
-		AdapterType: config.AdapterType,
-		file:        os.NewFile(uintptr(fd), "tun"),
+		adapterType:     config.AdapterType,
+		ReadWriteCloser: os.NewFile(uintptr(fd), "tun"),
 	}
 
 	adapterName, err := adapter.initializeAdapter(config, uintptr(fd))
 	if err != nil {
-		adapter.file.Close()
+		adapter.Close()
 		return nil, err
 	}
 
 	adapter.name = adapterName
 
-	if !config.UnicastIP.IP.IsUnspecified() {
+	if config.UnicastIP.IP != nil {
+		log.Printf("Setting unicast IP address: %v", config.UnicastIP)
 		if err = adapter.SetUnicastIpAddressEntry(&config.UnicastIP); err != nil {
-			adapter.file.Close()
+			adapter.Close()
 			return nil, err
 		}
 	}
 
 	if config.MTU > 0 {
 		if err = adapter.SetMTU(config.MTU); err != nil {
-			adapter.file.Close()
+			adapter.Close()
 			return nil, err
 		}
 	}

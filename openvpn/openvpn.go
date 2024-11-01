@@ -40,7 +40,7 @@ type OpenVPNAdapter struct {
 func (a *OpenVPNAdapter) Write(buf []byte) (int, error)           { return a.file.Write(buf) }
 func (a *OpenVPNAdapter) Read(buf []byte) (int, error)            { return a.file.Read(buf) }
 func (a *OpenVPNAdapter) Close() error                            { return a.file.Close() }
-func (a *OpenVPNAdapter) File() *os.File                          { return a.file }
+func (a *OpenVPNAdapter) GetFD() *os.File                         { return a.file }
 func (a *OpenVPNAdapter) GetAdapterName() (string, error)         { return a.name, nil }
 func (a *OpenVPNAdapter) GetAdapterGUID() (swiftypes.GUID, error) { return a.guid, nil }
 
