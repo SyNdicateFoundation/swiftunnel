@@ -21,12 +21,17 @@ type Config struct {
 	AdapterType     swiftypes.AdapterType
 	DriverType      DriverType
 
-	MTU       int
-	DNSConfig *swiftypes.DNSConfig
-	UnicastIP *net.IPNet
+	MTU           int
+	DNSConfig     *swiftypes.DNSConfig
+	UnicastConfig *swiftypes.UnicastConfig
 }
 
 func NewDefaultConfig() Config {
+	ip, ipNet, err := net.ParseCIDR("10.18.21.1/24")
+	if err != nil {
+		panic(err)
+	}
+
 	return Config{
 		AdapterName:     "Swiftunnel VPN",
 		AdapterTypeName: "Swiftunnel",
@@ -39,9 +44,10 @@ func NewDefaultConfig() Config {
 				net.IPv4(8, 8, 4, 4),
 			},
 		},
-		UnicastIP: &net.IPNet{
-			IP:   net.IPv4(10, 18, 21, 1),
-			Mask: net.IPv4Mask(255, 255, 255, 0),
+		UnicastConfig: &swiftypes.UnicastConfig{
+			IP:       ip,
+			IPNet:    ipNet,
+			DadState: swiftypes.IpDadStatePreferred,
 		},
 	}
 }

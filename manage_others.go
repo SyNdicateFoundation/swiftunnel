@@ -5,6 +5,7 @@ package swiftunnel
 import (
 	"errors"
 	"fmt"
+	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"net"
@@ -24,13 +25,13 @@ func setMTU(ifaceName string, mtu int) error {
 	return nil
 }
 
-func setUnicastIpAddressEntry(ifaceName string, entry *net.IPNet) error {
+func setUnicastIpAddressEntry(ifaceName string, config *swiftypes.UnicastConfig) error {
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
 
-	addr := &netlink.Addr{IPNet: entry, Scope: unix.RT_SCOPE_UNIVERSE}
+	addr := &netlink.Addr{IPNet: &net.IPNet{IP: config.IP, Mask: config.IPNet.Mask}}
 	if err := netlink.AddrAdd(link, addr); err != nil {
 		if errors.Is(err, unix.EEXIST) {
 			return nil

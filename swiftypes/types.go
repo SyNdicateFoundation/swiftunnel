@@ -1,6 +1,7 @@
 package swiftypes
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -50,30 +51,49 @@ func NewLUID(luid uint64) LUID {
 }
 
 func ParseGUID(guid string) (result GUID, err error) {
-	parts := strings.Split(guid, "-")
-	if len(parts) != 5 {
-		return result, fmt.Errorf("invalid GUID format: %q", guid)
+	if len(guid) != 36 || guid[8] != '-' || guid[13] != '-' || guid[18] != '-' || guid[23] != '-' {
+		return result, errors.New("invalid GUID format")
 	}
 
-	var (
-		data1, _ = strconv.ParseUint(parts[0], 16, 32)
-		data2, _ = strconv.ParseUint(parts[1], 16, 16)
-		data3, _ = strconv.ParseUint(parts[2], 16, 16)
-		data4    = make([]byte, 8)
-	)
-
-	for i, b := range []string{parts[3], parts[4]} {
-		v, _ := strconv.ParseUint(b, 16, 8)
-		data4[i*2] = byte(v >> 8)
-		data4[i*2+1] = byte(v)
+	guidWithoutHyphens := strings.ReplaceAll(guid, "-", "")
+	if len(guidWithoutHyphens) != 32 {
+		return result, errors.New("invalid GUID length")
 	}
 
-	result = GUID{
-		Data1: uint32(data1),
-		Data2: uint16(data2),
-		Data3: uint16(data3),
-		Data4: [8]byte(data4),
+	// Parse each segment and assign to windows.GUID fields
+	result.Data1, err = parseHexUint32(guidWithoutHyphens[0:8])
+	if err != nil {
+		return result, err
+	}
+	result.Data2, err = parseHexUint16(guidWithoutHyphens[8:12])
+	if err != nil {
+		return result, err
+	}
+	result.Data3, err = parseHexUint16(guidWithoutHyphens[12:16])
+	if err != nil {
+		return result, err
+	}
+
+	// Parse Data4, which is 8 bytes
+	for i := 0; i < 8; i++ {
+		byteValue, err := strconv.ParseUint(guidWithoutHyphens[16+i*2:18+i*2], 16, 8)
+		if err != nil {
+			return result, err
+		}
+		result.Data4[i] = byte(byteValue)
 	}
 
 	return result, nil
+}
+
+// Helper to parse 32-bit hex number
+func parseHexUint32(hexStr string) (uint32, error) {
+	value, err := strconv.ParseUint(hexStr, 16, 32)
+	return uint32(value), err
+}
+
+// Helper to parse 16-bit hex number
+func parseHexUint16(hexStr string) (uint16, error) {
+	value, err := strconv.ParseUint(hexStr, 16, 16)
+	return uint16(value), err
 }

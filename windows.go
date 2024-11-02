@@ -7,7 +7,6 @@ import (
 	"github.com/XenonCommunity/swiftunnel/openvpn"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"github.com/XenonCommunity/swiftunnel/wintun"
-	"net"
 	"os"
 )
 
@@ -89,13 +88,13 @@ func (w *SwiftInterface) SetMTU(mtu int) error {
 	return setMTU(adapterIndex, mtu)
 }
 
-func (w *SwiftInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
+func (w *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
 	luid, err := w.GetAdapterLUID()
 	if err != nil {
 		return err
 	}
 
-	return setUnicastIpAddressEntry(luid, entry, IpDadStatePreferred)
+	return setUnicastIpAddressEntry(luid, config)
 }
 
 func (w *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
@@ -139,21 +138,21 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 		adapter.service, err = adap.StartSession(0x800000)
 
-		if config.UnicastIP != nil {
-			if err = adapter.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
+		if config.UnicastConfig != nil {
+			if err = adapter.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
 				return nil, err
 			}
 		}
 	case DriverTypeOpenVPN:
-		if config.UnicastIP == nil {
+		if config.UnicastConfig == nil {
 			return nil, errors.New("unicast IP not specified")
 		}
 
 		adapter.service, err = openvpn.NewOpenVPNAdapter(
 			config.AdapterGUID,
 			config.AdapterName,
-			config.UnicastIP.IP,
-			config.UnicastIP,
+			config.UnicastConfig.IP,
+			config.UnicastConfig.IPNet,
 			config.AdapterType == swiftypes.AdapterTypeTAP,
 		)
 	default:

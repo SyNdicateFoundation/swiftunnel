@@ -2,6 +2,8 @@
 
 package swiftunnel
 
+import "github.com/XenonCommunity/swiftunnel/swiftypes"
+
 type mibUnicastIPAddressRow struct {
 	Address            sockaddrInet
 	InterfaceLUID      uint64
@@ -12,14 +14,14 @@ type mibUnicastIPAddressRow struct {
 	PreferredLifetime  uint32
 	OnLinkPrefixLength uint8
 	SkipAsSource       bool
-	DadState           DadState
+	DadState           swiftypes.DadState
 	ScopeID            uint32
 	CreationTimeStamp  int64
 }
 
 type dnsInterfaceSettings struct {
 	Version             uint32
-	Flags               uint64
+	Flags               dnsSettingFlags
 	Domain              *uint16
 	NameServer          *uint16
 	SearchList          *uint16

@@ -324,6 +324,7 @@ func (a *WintunAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
 
 	return swiftypes.NewLUID(luid64), nil
 }
+
 func (a *WintunAdapter) GetAdapterGUID() (swiftypes.GUID, error) {
 	if a.handle == 0 {
 		return swiftypes.NilGUID, ErrInvalidAdapterHandle

@@ -253,16 +253,16 @@ func (a *SwiftInterface) SetMTU(mtu int) error {
 	return setMTU(a.name, mtu)
 }
 
-func (a *SwiftInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
-	return setUnicastIpAddressEntry(a.name, entry)
+func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
+	return setUnicastIpAddressEntry(a.name, config)
 }
 
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	switch config.DriverType {
 	case DriverTypeTunTapOSX:
 		osx, err := openDevTunTapOSX(config)
-		if config.UnicastIP == nil {
-			if err = osx.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
+		if config.UnicastConfig == nil {
+			if err = osx.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
 				return nil, err
 			}
 		}
@@ -276,8 +276,8 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 		return osx, err
 	case DriverTypeSystem:
 		system, err := openDevSystem(config)
-		if config.UnicastIP == nil {
-			if err = system.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
+		if config.UnicastConfig == nil {
+			if err = system.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
 				return nil, err
 			}
 		}

@@ -116,8 +116,8 @@ func (a *SwiftInterface) SetMTU(mtu int) error {
 	return setMTU(a.name, mtu)
 }
 
-func (a *SwiftInterface) SetUnicastIpAddressEntry(entry *net.IPNet) error {
-	return setUnicastIpAddressEntry(a.name, entry)
+func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
+	return setUnicastIpAddressEntry(a.name, config)
 }
 
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
@@ -139,8 +139,8 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 	adapter.name = adapterName
 
-	if config.UnicastIP != nil {
-		if err = adapter.SetUnicastIpAddressEntry(config.UnicastIP); err != nil {
+	if config.UnicastConfig != nil {
+		if err = adapter.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
 			adapter.Close()
 			return nil, err
 		}

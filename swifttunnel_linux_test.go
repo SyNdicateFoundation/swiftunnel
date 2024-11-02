@@ -9,11 +9,19 @@ import (
 )
 
 func TestNewSwiftInterface(t *testing.T) {
+	ip, ipNet, err := net.ParseCIDR("8.8.8.8/24")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
 	config := Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,
-		UnicastIP:   &net.IPNet{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(24, 32)},
+		UnicastConfig: &swiftypes.UnicastConfig{
+			IPNet: ipNet,
+			IP:    ip,
+		},
 	}
 
 	// Create a new SwiftInterface
@@ -74,8 +82,16 @@ func TestSetUnicastIpAddressEntry(t *testing.T) {
 	}
 	defer adapter.Close()
 
-	ipNet := net.IPNet{IP: net.ParseIP("10.0.0.1"), Mask: net.CIDRMask(24, 32)}
-	if err := adapter.SetUnicastIpAddressEntry(&ipNet); err != nil {
+	ip, ipNet, err := net.ParseCIDR("8.8.8.8/24")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	unicastConfig := &swiftypes.UnicastConfig{
+		IPNet: ipNet,
+		IP:    ip,
+	}
+	if err := adapter.SetUnicastIpAddressEntry(unicastConfig); err != nil {
 		t.Fatalf("expected no error setting IP address, got %v", err)
 	}
 }
