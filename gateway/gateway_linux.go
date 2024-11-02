@@ -9,34 +9,29 @@ import (
 	"strings"
 )
 
-var errCantParse = errors.New("unable to parse route output")
+var ErrCantParse = errors.New("unable to parse gateway IP from route output")
 
+// DiscoverGatewayIPv4 finds the IPv4 default gateway for Linux.
 func DiscoverGatewayIPv4() (net.IP, error) {
-	cmd := exec.Command("sh", "-c", "ip route | grep 'default' | awk '{print $3}'")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, err
-	}
-
-	ipStr := strings.TrimSpace(string(output))
-	ipv4 := net.ParseIP(ipStr)
-	if ipv4 == nil {
-		return nil, errCantParse
-	}
-	return ipv4, nil
+	return discoverGateway("ip route | grep 'default' | awk '{print $3}'")
 }
 
+// DiscoverGatewayIPv6 finds the IPv6 default gateway for Linux.
 func DiscoverGatewayIPv6() (net.IP, error) {
-	cmd := exec.Command("sh", "-c", "ip -6 route | grep 'default' | awk '{print $3}'")
-	output, err := cmd.CombinedOutput()
+	return discoverGateway("ip -6 route | grep 'default' | awk '{print $3}'")
+}
+
+// discoverGateway executes a shell command to fetch and parse the gateway IP address.
+func discoverGateway(cmdStr string) (net.IP, error) {
+	output, err := exec.Command("sh", "-c", cmdStr).CombinedOutput()
 	if err != nil {
 		return nil, err
 	}
 
 	ipStr := strings.TrimSpace(string(output))
-	ipv6 := net.ParseIP(ipStr)
-	if ipv6 == nil {
-		return nil, errCantParse
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return nil, ErrCantParse
 	}
-	return ipv6, nil
+	return ip, nil
 }
