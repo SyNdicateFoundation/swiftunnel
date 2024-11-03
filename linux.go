@@ -120,6 +120,10 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	return setUnicastIpAddressEntry(a.name, config)
 }
 
+func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
+	return setUplink(a.name, status)
+}
+
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR|syscall.O_NONBLOCK, 0)
 	if err != nil {

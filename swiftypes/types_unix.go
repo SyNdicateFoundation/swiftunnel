@@ -6,6 +6,11 @@ import (
 	"net"
 )
 
+const (
+	InterfaceUp InterfaceStatus = iota
+	InterfaceDown
+)
+
 type GUID struct {
 	Data1 uint32
 	Data2 uint16
@@ -19,6 +24,6 @@ type LUID struct {
 }
 
 type UnicastConfig struct {
-	IPNet   *net.IPNet
-	Gateway net.IP
+	IPNet       *net.IPNet
+	Gateway, IP net.IP
 }

@@ -257,23 +257,27 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	return setUnicastIpAddressEntry(a.name, config)
 }
 
+func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
+	return setUplink(a.name, status)
+}
+
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 	switch config.DriverType {
 	case DriverTypeTunTapOSX:
-		osx, err := openDevTunTapOSX(config)
+		tapOSX, err := openDevTunTapOSX(config)
 		if config.UnicastConfig == nil {
-			if err = osx.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
+			if err = tapOSX.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
 				return nil, err
 			}
 		}
 
 		if config.MTU > 0 {
-			if err = osx.SetMTU(config.MTU); err != nil {
+			if err = tapOSX.SetMTU(config.MTU); err != nil {
 				return nil, err
 			}
 		}
 
-		return osx, err
+		return tapOSX, err
 	case DriverTypeSystem:
 		system, err := openDevSystem(config)
 		if config.UnicastConfig == nil {

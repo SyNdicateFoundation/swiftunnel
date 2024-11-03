@@ -17,6 +17,7 @@ var NilGUID = GUID{}
 var NilLUID = LUID{}
 
 type AdapterType int
+type InterfaceStatus uint32
 
 const (
 	AdapterTypeTUN AdapterType = iota

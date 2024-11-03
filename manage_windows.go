@@ -28,14 +28,14 @@ func setMTU(index uint32, mtu int) error {
 
 	ifRow.Index = index
 
-	ret, _, err := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
-	if ret != 0 {
+	ret, _, _ := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
+	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to retrieve interface entry: %w", err)
 	}
 
 	ifRow.Mtu = uint32(mtu)
-	ret, _, err = procSetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
-	if ret != 0 {
+	ret, _, _ = procSetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
+	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to set MTU: %w", err)
 	}
 
@@ -87,7 +87,7 @@ func setDNS(guid swiftypes.GUID, config *swiftypes.DNSConfig) error {
 		uintptr(unsafe.Pointer(&guid)),
 		uintptr(unsafe.Pointer(&settings)),
 	)
-	if ret != 0 {
+	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to get DNS settings: %w", windows.Errno(ret))
 	}
 
@@ -132,8 +132,33 @@ func setDNS(guid swiftypes.GUID, config *swiftypes.DNSConfig) error {
 		uintptr(unsafe.Pointer(&guid)),
 		uintptr(unsafe.Pointer(&settings)),
 	)
-	if ret != 0 {
+	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to set DNS settings: %w", windows.Errno(ret))
+	}
+
+	return nil
+}
+
+func setInterfaceStatus(index uint32, status swiftypes.InterfaceStatus) error {
+	var ifRow windows.MibIfRow
+
+	ifRow.Index = index
+
+	ret, _, _ := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
+	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
+		return fmt.Errorf("failed to retrieve interface entry: %w", err)
+	}
+
+	switch status {
+	case swiftypes.InterfaceUp:
+		ifRow.OperStatus = windows.IfOperStatusUp
+	case swiftypes.InterfaceDown:
+		ifRow.OperStatus = windows.IfOperStatusDown
+	}
+
+	ret, _, _ = procSetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
+	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
+		return fmt.Errorf("failed to set interface status: %w", err)
 	}
 
 	return nil

@@ -52,3 +52,19 @@ func setUnicastIpAddressEntry(ifaceName string, config *swiftypes.UnicastConfig)
 func setDNS(dnsServers []string) error {
 	return errors.New("DNS configuration not supported on this platform")
 }
+
+func setUplink(ifaceName string, status swiftypes.InterfaceStatus) error {
+	link, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		return fmt.Errorf("failed to find interface: %w", err)
+	}
+
+	switch status {
+	case swiftypes.InterfaceUp:
+		return netlink.LinkSetUp(link)
+	case swiftypes.InterfaceDown:
+		return netlink.LinkSetDown(link)
+	}
+
+	return nil
+}

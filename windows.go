@@ -31,56 +31,56 @@ type SwiftInterface struct {
 	service swiftService
 }
 
-func (w *SwiftInterface) Write(buf []byte) (int, error) {
-	if w.service == nil {
+func (a *SwiftInterface) Write(buf []byte) (int, error) {
+	if a.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
 
-	return w.service.Write(buf)
+	return a.service.Write(buf)
 }
 
-func (w *SwiftInterface) Read(buf []byte) (int, error) {
-	if w.service == nil {
+func (a *SwiftInterface) Read(buf []byte) (int, error) {
+	if a.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
 
-	return w.service.Read(buf)
+	return a.service.Read(buf)
 }
 
-func (w *SwiftInterface) Close() error {
-	if w.service == nil {
+func (a *SwiftInterface) Close() error {
+	if a.service == nil {
 		return ErrCannotFindAdapter
 	}
 
-	return w.service.Close()
+	return a.service.Close()
 }
 
-func (w *SwiftInterface) GetFD() *os.File {
-	if w.service == nil {
+func (a *SwiftInterface) GetFD() *os.File {
+	if a.service == nil {
 		return nil
 	}
 
-	return w.service.GetFD()
+	return a.service.GetFD()
 }
 
-func (w *SwiftInterface) GetAdapterName() (string, error) {
-	if w.service == nil {
+func (a *SwiftInterface) GetAdapterName() (string, error) {
+	if a.service == nil {
 		return "", ErrCannotFindAdapter
 	}
 
-	return w.service.GetAdapterName()
+	return a.service.GetAdapterName()
 }
 
-func (w *SwiftInterface) GetAdapterIndex() (uint32, error) {
-	if w.service == nil {
+func (a *SwiftInterface) GetAdapterIndex() (uint32, error) {
+	if a.service == nil {
 		return 0, ErrCannotFindAdapter
 	}
 
-	return w.service.GetAdapterIndex()
+	return a.service.GetAdapterIndex()
 }
 
-func (w *SwiftInterface) SetMTU(mtu int) error {
-	adapterIndex, err := w.GetAdapterIndex()
+func (a *SwiftInterface) SetMTU(mtu int) error {
+	adapterIndex, err := a.GetAdapterIndex()
 	if err != nil {
 		return err
 	}
@@ -88,8 +88,8 @@ func (w *SwiftInterface) SetMTU(mtu int) error {
 	return setMTU(adapterIndex, mtu)
 }
 
-func (w *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
-	luid, err := w.GetAdapterLUID()
+func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
+	luid, err := a.GetAdapterLUID()
 	if err != nil {
 		return err
 	}
@@ -97,8 +97,8 @@ func (w *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	return setUnicastIpAddressEntry(luid, config)
 }
 
-func (w *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
-	guid, err := w.GetAdapterGUID()
+func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
+	guid, err := a.GetAdapterGUID()
 	if err != nil {
 		return err
 	}
@@ -106,20 +106,29 @@ func (w *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	return setDNS(guid, config)
 }
 
-func (w *SwiftInterface) GetAdapterLUID() (swiftypes.LUID, error) {
-	if w.service == nil {
+func (a *SwiftInterface) GetAdapterLUID() (swiftypes.LUID, error) {
+	if a.service == nil {
 		return swiftypes.NilLUID, ErrCannotFindAdapter
 	}
 
-	return w.service.GetAdapterLUID()
+	return a.service.GetAdapterLUID()
 }
 
-func (w *SwiftInterface) GetAdapterGUID() (swiftypes.GUID, error) {
-	if w.service == nil {
+func (a *SwiftInterface) GetAdapterGUID() (swiftypes.GUID, error) {
+	if a.service == nil {
 		return swiftypes.NilGUID, ErrCannotFindAdapter
 	}
 
-	return w.service.GetAdapterGUID()
+	return a.service.GetAdapterGUID()
+}
+
+func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
+	index, err := a.GetAdapterIndex()
+	if err != nil {
+		return err
+	}
+
+	return setInterfaceStatus(index, status)
 }
 
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {

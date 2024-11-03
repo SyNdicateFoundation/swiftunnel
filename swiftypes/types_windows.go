@@ -17,6 +17,11 @@ const (
 	IpDadStatePreferred
 )
 
+const (
+	InterfaceUp InterfaceStatus = iota
+	InterfaceDown
+)
+
 type GUID windows.GUID
 type LUID windows.LUID
 

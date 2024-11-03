@@ -6,6 +6,7 @@ import (
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestNewSwiftInterface(t *testing.T) {
@@ -50,6 +51,7 @@ func TestNewSwiftInterface(t *testing.T) {
 		t.Error("expected a valid adapter index, got 0")
 	}
 
+	time.Sleep()
 }
 
 func TestSetMTU(t *testing.T) {

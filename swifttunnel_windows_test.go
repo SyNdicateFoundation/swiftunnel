@@ -4,6 +4,7 @@ package swiftunnel
 
 import (
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"log"
 	"testing"
 	"time"
 )
@@ -21,6 +22,20 @@ func TestNewDefaultConfig(t *testing.T) {
 	}
 
 	defer s.Close()
+
+	if err := s.SetStatus(swiftypes.InterfaceDown); err != nil {
+		t.Fatal(err)
+	}
+
+	log.Println("InterfaceDown")
+
+	time.Sleep(10 * time.Second)
+
+	if err := s.SetStatus(swiftypes.InterfaceUp); err != nil {
+		t.Fatal(err)
+	}
+
+	log.Println("InterfaceUp")
 
 	time.Sleep(10 * time.Second)
 }
