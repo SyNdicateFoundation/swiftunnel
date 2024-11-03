@@ -125,7 +125,7 @@ func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
 }
 
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
-	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR|syscall.O_NONBLOCK, 0)
+	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}

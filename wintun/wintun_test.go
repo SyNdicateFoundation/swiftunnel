@@ -8,7 +8,6 @@ import (
 	"errors"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"testing"
-	"time"
 )
 
 func calculateChecksum(data []byte) uint16 {
@@ -68,8 +67,6 @@ func TestWintunAdapter(t *testing.T) {
 
 	ipChecksum := calculateChecksum(packet[:20])
 	binary.BigEndian.PutUint16(packet[10:], ipChecksum)
-
-	time.Sleep(10 * time.Second)
 
 	for i := 0; i < 10; i++ {
 		if _, err := session.Write(packet); err != nil {

@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewSwiftInterface(t *testing.T) {
-	ip, ipNet, err := net.ParseCIDR("8.8.8.8/24")
+	ip, ipNet, err := net.ParseCIDR("172.0.10.2/24")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -53,12 +53,10 @@ func TestNewSwiftInterface(t *testing.T) {
 }
 
 func TestSetMTU(t *testing.T) {
-	config := Config{
+	adapter, err := NewSwiftInterface(Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
-	}
-
-	adapter, err := NewSwiftInterface(config)
+	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -71,18 +69,16 @@ func TestSetMTU(t *testing.T) {
 }
 
 func TestSetUnicastIpAddressEntry(t *testing.T) {
-	config := Config{
+	adapter, err := NewSwiftInterface(Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
-	}
-
-	adapter, err := NewSwiftInterface(config)
+	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	defer adapter.Close()
 
-	ip, ipNet, err := net.ParseCIDR("8.8.8.8/24")
+	ip, ipNet, err := net.ParseCIDR("172.0.10.2/24")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -94,4 +90,37 @@ func TestSetUnicastIpAddressEntry(t *testing.T) {
 	if err := adapter.SetUnicastIpAddressEntry(unicastConfig); err != nil {
 		t.Fatalf("expected no error setting IP address, got %v", err)
 	}
+}
+
+func TestTunReadCloser_Read(t *testing.T) {
+	ip, ipNet, err := net.ParseCIDR("172.0.10.2/24")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	config := Config{
+		AdapterName: "tun0",
+		AdapterType: swiftypes.AdapterTypeTUN,
+		MTU:         1500,
+		UnicastConfig: &swiftypes.UnicastConfig{
+			IPNet: ipNet,
+			IP:    ip,
+		},
+	}
+
+	// Create a new SwiftInterface
+	adapter, err := NewSwiftInterface(config)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	defer adapter.Close()
+
+	if err := adapter.SetMTU(1400); err != nil {
+		t.Fatalf("expected no error setting MTU, got %v", err)
+	}
+
+	if err := adapter.SetStatus(swiftypes.InterfaceUp); err != nil {
+		t.Fatalf("expected no error setting status, got %v", err)
+	}
+
 }
