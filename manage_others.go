@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
-	"net"
 )
 
 func setMTU(ifaceName string, mtu int) error {
@@ -31,12 +29,21 @@ func setUnicastIpAddressEntry(ifaceName string, config *swiftypes.UnicastConfig)
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
 
-	addr := &netlink.Addr{IPNet: &net.IPNet{IP: config.IP, Mask: config.IPNet.Mask}}
-	if err := netlink.AddrAdd(link, addr); err != nil {
-		if errors.Is(err, unix.EEXIST) {
-			return nil
+	// Add the IP address to the interface
+	if err := netlink.AddrAdd(link, &netlink.Addr{
+		IPNet: config.IPNet,
+	}); err != nil {
+		return fmt.Errorf("failed to add address %v to interface %s: %v", config.IPNet, ifaceName, err)
+	}
+
+	// If a gateway is specified, add a route for it
+	if config.Gateway != nil {
+		if err := netlink.RouteAdd(&netlink.Route{
+			LinkIndex: link.Attrs().Index,
+			Gw:        config.Gateway,
+		}); err != nil {
+			return fmt.Errorf("failed to add route to gateway %v: %v", config.Gateway, err)
 		}
-		return fmt.Errorf("failed to add IP address: %w", err)
 	}
 
 	return nil

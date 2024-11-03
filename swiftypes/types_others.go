@@ -19,6 +19,6 @@ type LUID struct {
 }
 
 type UnicastConfig struct {
-	IPNet       *net.IPNet
-	Gateway, IP net.IP
+	IPNet   *net.IPNet
+	Gateway net.IP
 }
