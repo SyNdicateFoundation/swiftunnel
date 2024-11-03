@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"golang.org/x/sys/windows"
-	"log"
 	"net"
 	"strings"
 	"unsafe"
@@ -73,7 +72,6 @@ func setUnicastIpAddressEntry(luid swiftypes.LUID, config *swiftypes.UnicastConf
 		return fmt.Errorf("failed to create unicast IP address config: %w (error code: %d)", errno, ret)
 	}
 
-	log.Println("Successfully created unicast IP address config.")
 	return nil
 }
 
