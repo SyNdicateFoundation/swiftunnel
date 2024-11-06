@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/windows"
 	"net"
 	"strings"
@@ -22,10 +23,47 @@ var (
 	procSetIfEntry                      = iphlpapi.NewProc("SetIfEntry")
 )
 
-func setMTU(index uint32, mtu int) error {
+func (a *SwiftInterface) GetAdapterLUID() (swiftypes.LUID, error) {
+	if a.service == nil {
+		return swiftypes.NilLUID, ErrCannotFindAdapter
+	}
+
+	return a.service.GetAdapterLUID()
+}
+
+func (a *SwiftInterface) GetAdapterGUID() (swiftypes.GUID, error) {
+	if a.service == nil {
+		return swiftypes.NilGUID, ErrCannotFindAdapter
+	}
+
+	return a.service.GetAdapterGUID()
+}
+
+func (a *SwiftInterface) GetAdapterName() (string, error) {
+	if a.service == nil {
+		return "", ErrCannotFindAdapter
+	}
+
+	return a.service.GetAdapterName()
+}
+
+func (a *SwiftInterface) GetAdapterIndex() (int, error) {
+	if a.service == nil {
+		return 0, ErrCannotFindAdapter
+	}
+
+	return a.service.GetAdapterIndex()
+}
+
+func (a *SwiftInterface) SetMTU(mtu int) error {
+	adapterIndex, err := a.GetAdapterIndex()
+	if err != nil {
+		return err
+	}
+
 	var ifRow windows.MibIfRow
 
-	ifRow.Index = index
+	ifRow.Index = uint32(adapterIndex)
 
 	ret, _, _ := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
@@ -41,11 +79,16 @@ func setMTU(index uint32, mtu int) error {
 	return nil
 }
 
-func setUnicastIpAddressEntry(luid swiftypes.LUID, config *swiftypes.UnicastConfig) error {
+func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
+	luid, err := a.GetAdapterLUID()
+	if err != nil {
+		return err
+	}
+
 	var addressRow mibUnicastIPAddressRow
 
 	// Initialize the addressRow structure
-	procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
+	_, _, _ = procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
 
 	if ipv4 := config.IP.To4(); ipv4 != nil {
 		addressRow.Address.Family = windows.AF_INET
@@ -75,7 +118,12 @@ func setUnicastIpAddressEntry(luid swiftypes.LUID, config *swiftypes.UnicastConf
 	return nil
 }
 
-func setDNS(guid swiftypes.GUID, config *swiftypes.DNSConfig) error {
+func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
+	guid, err := a.GetAdapterGUID()
+	if err != nil {
+		return err
+	}
+
 	var settings dnsInterfaceSettings
 
 	settings.Version = 1
@@ -137,10 +185,20 @@ func setDNS(guid swiftypes.GUID, config *swiftypes.DNSConfig) error {
 	return nil
 }
 
-func setInterfaceStatus(index uint32, status swiftypes.InterfaceStatus) error {
+func (a *SwiftInterface) AddRoute(route netlink.Route) error {
+	// TODO: code it
+	return errors.New("not implemented")
+}
+
+func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
+	index, err := a.GetAdapterIndex()
+	if err != nil {
+		return err
+	}
+
 	var ifRow windows.MibIfRow
 
-	ifRow.Index = index
+	ifRow.Index = uint32(index)
 
 	ret, _, _ := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {

@@ -3,10 +3,8 @@
 package swiftunnel
 
 import (
-	"errors"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"io"
-	"net"
 	"os"
 	"strings"
 	"syscall"
@@ -80,48 +78,8 @@ func (a *SwiftInterface) setDeviceOptions(fd uintptr, config Config) error {
 	return ioctl(fd, syscall.TUNSETPERSIST, uintptr(persistFlag))
 }
 
-func ioctl(fd uintptr, request uintptr, argp uintptr) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, request, argp)
-	if errno != 0 {
-		return os.NewSyscallError("ioctl", errno)
-	}
-	return nil
-}
-
 func (a *SwiftInterface) GetFD() *os.File {
 	return a.ReadWriteCloser.(*os.File)
-}
-
-func (a *SwiftInterface) GetAdapterName() (string, error) {
-	if a.name == "" {
-		return "", errors.New("adapter name is not set")
-	}
-	return a.name, nil
-}
-
-func (a *SwiftInterface) GetAdapterIndex() (uint32, error) {
-	if a.name == "" {
-		return 0, errors.New("adapter name is not set")
-	}
-
-	ifi, err := net.InterfaceByName(a.name)
-	if err != nil {
-		return 0, err
-	}
-
-	return uint32(ifi.Index), nil
-}
-
-func (a *SwiftInterface) SetMTU(mtu int) error {
-	return setMTU(a.name, mtu)
-}
-
-func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
-	return setUnicastIpAddressEntry(a.name, config)
-}
-
-func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
-	return setUplink(a.name, status)
 }
 
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {
@@ -137,7 +95,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 	adapterName, err := adapter.initializeAdapter(config, uintptr(fd))
 	if err != nil {
-		adapter.Close()
+		_ = adapter.Close()
 		return nil, err
 	}
 
@@ -145,14 +103,14 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 
 	if config.UnicastConfig != nil {
 		if err = adapter.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
-			adapter.Close()
+			_ = adapter.Close()
 			return nil, err
 		}
 	}
 
 	if config.MTU > 0 {
 		if err = adapter.SetMTU(config.MTU); err != nil {
-			adapter.Close()
+			_ = adapter.Close()
 			return nil, err
 		}
 	}

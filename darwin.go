@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/XenonCommunity/swiftunnel/swiftypes"
 	"math"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -53,14 +52,17 @@ func openDevSystem(config Config) (*SwiftInterface, error) {
 		return nil, fmt.Errorf("error creating socket: %w", err)
 	}
 
-	defer syscall.Close(fd)
+	defer func(fd int) {
+		_ = syscall.Close(fd)
+	}(fd)
+
 	ctlInfo := &struct {
 		ctlID   uint32
 		ctlName [96]byte
 	}{}
 	copy(ctlInfo.ctlName[:], appleUTUNCtl)
 
-	if err := ioctl(fd, appleCTLIOCGINFO, uintptr(unsafe.Pointer(ctlInfo))); err != nil {
+	if err := ioctl(uintptr(fd), uintptr(appleCTLIOCGINFO), uintptr(unsafe.Pointer(ctlInfo))); err != nil {
 		return nil, fmt.Errorf("error in ioctl call: %w", err)
 	}
 
@@ -119,8 +121,8 @@ func openDevTunTapOSX(config Config) (*SwiftInterface, error) {
 		return nil, fmt.Errorf("error opening device: %w", err)
 	}
 
-	if err := setIfUp(fd, config.AdapterName); err != nil {
-		syscall.Close(fd)
+	if err := setIfUp(uintptr(fd), config.AdapterName); err != nil {
+		_ = syscall.Close(fd)
 		return nil, err
 	}
 
@@ -131,14 +133,6 @@ func openDevTunTapOSX(config Config) (*SwiftInterface, error) {
 			f: os.NewFile(uintptr(fd), config.AdapterName),
 		},
 	}, nil
-}
-
-func ioctl(fd int, cmd uint32, arg uintptr) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(cmd), arg)
-	if errno != 0 {
-		return errno
-	}
-	return nil
 }
 
 func connect(fd int, addr *sockaddrCtl) error {
@@ -160,7 +154,7 @@ func getIfName(fd int) (string, error) {
 	return string(ifName[:ifNameSize-1]), nil
 }
 
-func setIfUp(fd int, ifName string) error {
+func setIfUp(fd uintptr, ifName string) error {
 	var ifReq = struct {
 		ifName    [16]byte
 		ifruFlags int16
@@ -227,38 +221,6 @@ func (t *tunReadCloser) Close() error {
 
 func (a *SwiftInterface) GetFD() *os.File {
 	return a.tunReadCloser.f
-}
-
-func (a *SwiftInterface) GetAdapterName() (string, error) {
-	if a.name == "" {
-		return "", errors.New("adapter name is not set")
-	}
-	return a.name, nil
-}
-
-func (a *SwiftInterface) GetAdapterIndex() (uint32, error) {
-	if a.name == "" {
-		return 0, errors.New("adapter name is not set")
-	}
-
-	ifi, err := net.InterfaceByName(a.name)
-	if err != nil {
-		return 0, err
-	}
-
-	return uint32(ifi.Index), nil
-}
-
-func (a *SwiftInterface) SetMTU(mtu int) error {
-	return setMTU(a.name, mtu)
-}
-
-func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
-	return setUnicastIpAddressEntry(a.name, config)
-}
-
-func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
-	return setUplink(a.name, status)
 }
 
 func NewSwiftInterface(config Config) (*SwiftInterface, error) {

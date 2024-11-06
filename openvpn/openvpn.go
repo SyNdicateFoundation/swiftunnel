@@ -44,12 +44,12 @@ func (a *OpenVPNAdapter) GetFD() *os.File                         { return a.fil
 func (a *OpenVPNAdapter) GetAdapterName() (string, error)         { return a.name, nil }
 func (a *OpenVPNAdapter) GetAdapterGUID() (swiftypes.GUID, error) { return a.guid, nil }
 
-func (a *OpenVPNAdapter) GetAdapterIndex() (uint32, error) {
+func (a *OpenVPNAdapter) GetAdapterIndex() (int, error) {
 	ifce, err := net.InterfaceByName(a.name)
 	if err != nil {
 		return 0, fmt.Errorf("unable to retrieve adapter index: %w", err)
 	}
-	return uint32(ifce.Index), nil
+	return ifce.Index, nil
 }
 
 func (a *OpenVPNAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
@@ -119,7 +119,9 @@ func getDeviceID(name string, componentID swiftypes.GUID) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not access TAP driver registry key: %w", err)
 	}
-	defer key.Close()
+	defer func(key registry.Key) {
+		_ = key.Close()
+	}(key)
 
 	keys, err := key.ReadSubKeyNames(-1)
 	if err != nil {
@@ -139,7 +141,9 @@ func findDeviceByID(subKey, name string, componentID swiftypes.GUID) (string, er
 	if err != nil {
 		return "", err
 	}
-	defer key.Close()
+	defer func(key registry.Key) {
+		_ = key.Close()
+	}(key)
 
 	val, _, err := key.GetStringValue("ComponentId")
 	if err != nil || val != componentID.String() {
@@ -157,7 +161,9 @@ func findDeviceByID(subKey, name string, componentID swiftypes.GUID) (string, er
 		if err != nil {
 			return "", err
 		}
-		defer conn.Close()
+		defer func(conn registry.Key) {
+			_ = conn.Close()
+		}(conn)
 
 		if value, _, err := conn.GetStringValue("Name"); err != nil || value != name {
 			return "", fmt.Errorf("interface value '%s' does not match", name)

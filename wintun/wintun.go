@@ -66,7 +66,9 @@ func loadWintunDLL() error {
 		return fmt.Errorf("failed to create temp file for Wintun DLL: %w", err)
 	}
 
-	defer os.Remove(dllFile.Name())
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(dllFile.Name())
 
 	if _, err := dllFile.Write(wintunDLLData); err != nil {
 		return fmt.Errorf("failed to write Wintun DLL data: %w", err)
@@ -304,12 +306,12 @@ func (a *WintunAdapter) GetRunningDriverVersion() (string, error) {
 	return fmt.Sprintf("%d.%d", version>>16&0xff, version&0xff), nil
 }
 
-func (s *WintunAdapter) GetFD() *os.File {
+func (a *WintunAdapter) GetFD() *os.File {
 	return nil
 }
 
-func (s *WintunAdapter) GetAdapterName() (string, error) {
-	return s.name, nil
+func (a *WintunAdapter) GetAdapterName() (string, error) {
+	return a.name, nil
 }
 
 func (a *WintunAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
@@ -344,7 +346,7 @@ func (a *WintunAdapter) GetAdapterGUID() (swiftypes.GUID, error) {
 	return retrievedGUID, nil
 }
 
-func (a *WintunAdapter) GetAdapterIndex() (uint32, error) {
+func (a *WintunAdapter) GetAdapterIndex() (int, error) {
 	luid, err := a.GetAdapterLUID()
 	if err != nil {
 		return 0, err
@@ -355,7 +357,7 @@ func (a *WintunAdapter) GetAdapterIndex() (uint32, error) {
 		return 0, fmt.Errorf("failed to convert LUID to index: %v", err)
 	}
 
-	return index, nil
+	return int(index), nil
 }
 
 func UninstallWintun() {
