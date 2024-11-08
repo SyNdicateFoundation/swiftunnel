@@ -216,6 +216,8 @@ func (a *WintunAdapter) StartSession(capacity uint32) (*WintunSession, error) {
 }
 
 func (s *WintunSession) Close() error {
+	defer runtime.SetFinalizer(s, nil)
+
 	if s.handle == 0 {
 		return ErrInvalidSessionHandle
 	}
@@ -224,9 +226,7 @@ func (s *WintunSession) Close() error {
 		return fmt.Errorf("failed to end Wintun session: %v", err)
 	}
 
-	runtime.SetFinalizer(s, nil)
-
-	return nil
+	return s.WintunAdapter.Close()
 }
 
 func (s *WintunSession) Write(buf []byte) (int, error) {
