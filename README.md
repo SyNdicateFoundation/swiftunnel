@@ -9,7 +9,7 @@ To install Swiftunnel, follow these steps:
 1. Ensure you have Go 1.16 or later installed on your system.
 2. Clone the Swiftunnel repository:
    ```
-   git clone https://github.com/XenonCommunity/swiftunnel.git
+   git clone https://github.com/SyNdicateFoundation/swiftunnel.git
    ```
 3. Change into the project directory:
    ```
