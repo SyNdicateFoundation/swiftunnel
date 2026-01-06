@@ -9,7 +9,7 @@ import (
 )
 
 // FlushUnixDNS executes platform-specific shell commands to purge the DNS cache on macOS and Linux, suppressing all standard and error output.
-func FlushUnixDNS() error {
+func FlushDNS() error {
 	switch runtime.GOOS {
 	case "darwin":
 		c1 := exec.Command("dscacheutil", "-flushcache")
