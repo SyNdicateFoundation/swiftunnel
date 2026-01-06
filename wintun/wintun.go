@@ -124,13 +124,21 @@ func loadWintunFunctions() error {
 		"WintunReleaseReceivePacket":    &wintunReleaseReceivePacketFunc,
 		"WintunGetAdapterLUID":          &wintunGetAdapterLUIDFunc,
 	}
+
 	for name, proc := range procs {
 		*proc = wintunDLL.MustFindProc(name)
 		if *proc == nil {
 			return fmt.Errorf("failed to find procedure %s", name)
 		}
 	}
+
 	return nil
+}
+
+func init() {
+	if err := ensureDLL(); err != nil {
+		panic(err)
+	}
 }
 
 // WintunAdapter represents a handle to a Wintun network interface.
@@ -268,10 +276,11 @@ func (s *WintunSession) Close() error {
 		return ErrInvalidSessionHandle
 	}
 
-	s.handle = 0
 	if _, _, err := wintunEndSessionFunc.Call(s.handle); err != nil && !errors.Is(err, windows.NOERROR) {
 		return fmt.Errorf("failed to end session: %v", err)
 	}
+
+	s.handle = 0
 
 	return s.adapter.Close()
 }
@@ -447,9 +456,11 @@ func (a *WintunAdapter) GetAdapterIndex() (int, error) {
 		uintptr(unsafe.Pointer(&luid)),
 		uintptr(unsafe.Pointer(&index)),
 	)
+
 	if ret != 0 {
 		return 0, fmt.Errorf("ConvertInterfaceLuidToIndex failed: %d", ret)
 	}
+
 	return int(index), nil
 }
 
@@ -458,10 +469,12 @@ func (a *WintunAdapter) GetRunningDriverVersion() (string, error) {
 	if err := ensureDLL(); err != nil {
 		return "", err
 	}
+
 	v, _, _ := wintunGetRunningDriverVersionFunc.Call()
 	if v == 0 {
 		return "", errors.New("failed to get driver version")
 	}
+
 	return fmt.Sprintf("%d.%d", (v>>16)&0xFF, v&0xFF), nil
 }
 

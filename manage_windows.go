@@ -34,6 +34,11 @@ const (
 	nlRouteOriginManual      = 0
 )
 
+const (
+	IpPrefixOriginManual = 1
+	IpSuffixOriginManual = 1
+)
+
 // GetAdapterLUID retrieves the Locally Unique Identifier of the Windows adapter.
 func (a *SwiftInterface) GetAdapterLUID() (swiftypes.LUID, error) {
 	if a.service == nil {
@@ -103,11 +108,12 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	_, _, _ = procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
 
 	if ipv4 := config.IP.To4(); ipv4 != nil {
-		addressRow.Address.Family = windows.AF_INET
-		copy(addressRow.Address.Addr[:net.IPv4len], ipv4)
+		ipv4Row := (*windows.RawSockaddrInet4)(unsafe.Pointer(&addressRow.Address))
+		ipv4Row.Family = windows.AF_INET
+		copy(ipv4Row.Addr[:], ipv4)
 	} else if ipv6 := config.IP.To16(); ipv6 != nil {
 		addressRow.Address.Family = windows.AF_INET6
-		copy(addressRow.Address.Addr[:net.IPv6len], ipv6)
+		copy(addressRow.Address.Addr[:], ipv6)
 	} else {
 		return fmt.Errorf("invalid IP address: %s", config.IP)
 	}
@@ -117,16 +123,24 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 		return fmt.Errorf("invalid subnet mask: %v", config.IPNet.Mask)
 	}
 
-	if config.DadState == windows.IpDadStateInvalid {
-		addressRow.DadState = windows.IpDadStatePreferred
-	}
-
 	addressRow.InterfaceLuid = luid.ToUint64()
 	addressRow.OnLinkPrefixLength = uint8(ones)
-	addressRow.DadState = config.DadState
+
+	addressRow.PrefixOrigin = IpPrefixOriginManual
+	addressRow.SuffixOrigin = IpSuffixOriginManual
+
+	if config.DadState == windows.IpDadStateInvalid {
+		addressRow.DadState = windows.IpDadStatePreferred
+	} else {
+		addressRow.DadState = config.DadState
+	}
 
 	ret, _, _ := procCreateUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
-	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) && !errors.Is(errno, windows.ERROR_OBJECT_ALREADY_EXISTS) {
+
+	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
+		if errors.Is(errno, windows.ERROR_OBJECT_ALREADY_EXISTS) {
+			return nil
+		}
 		return fmt.Errorf("failed to create unicast IP address config: %w (error code: %d)", errno, ret)
 	}
 
@@ -316,12 +330,12 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 		return nil, err
 	}
 
-	// family: windows.AF_INET (2) or windows.AF_INET6 (23) or AF_UNSPEC (0)
 	var table *windows.MibIpForwardTable2
 	ret, _, _ := procGetIpForwardTable2.Call(
 		uintptr(family),
 		uintptr(unsafe.Pointer(&table)),
 	)
+
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		return nil, fmt.Errorf("failed to get route table: %w", errno)
 	}
@@ -334,14 +348,12 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 
 	var routes []netlink.Route
 	rowSize := unsafe.Sizeof(windows.MibIpForwardRow2{})
-	// table.Table is an array starting at offset 4 (after NumEntries uint32) + padding
 	base := uintptr(unsafe.Pointer(&table.Table[0]))
 
 	for i := uint32(0); i < table.NumEntries; i++ {
 		//goland:noinspection GoVetUnsafePointer
 		row := (*windows.MibIpForwardRow2)(unsafe.Pointer(base + uintptr(i)*rowSize))
 
-		// Filter by interface index
 		if int(row.InterfaceIndex) != idx {
 			continue
 		}
@@ -352,37 +364,31 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 			Protocol:  netlink.RouteProtocol(row.Protocol),
 		}
 
-		// Parse Destination
-		if row.DestinationPrefix.PrefixLength > 0 {
-			f := row.DestinationPrefix.Prefix.Family
-			var ip net.IP
-			if f == windows.AF_INET {
-				b := (*[4]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[0]))
-				ip = net.IPv4(b[0], b[1], b[2], b[3])
-			} else if f == windows.AF_INET6 {
-				b := (*[16]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[1]))
-				ip = b[:]
-			}
-			if ip != nil {
-				nlRoute.Dst = &net.IPNet{
-					IP:   ip,
-					Mask: net.CIDRMask(int(row.DestinationPrefix.PrefixLength), 8*len(ip)),
-				}
+		prefixFamily := row.DestinationPrefix.Prefix.Family
+		var dstIP net.IP
+
+		if prefixFamily == windows.AF_INET {
+			addrPtr := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.DestinationPrefix.Prefix))
+			dstIP = addrPtr.Addr[:]
+		} else if prefixFamily == windows.AF_INET6 {
+			addrPtr := (*windows.RawSockaddrInet6)(unsafe.Pointer(&row.DestinationPrefix.Prefix))
+			dstIP = addrPtr.Addr[:]
+		}
+
+		if dstIP != nil {
+			nlRoute.Dst = &net.IPNet{
+				IP:   dstIP,
+				Mask: net.CIDRMask(int(row.DestinationPrefix.PrefixLength), 8*len(dstIP)),
 			}
 		}
 
-		// Parse Gateway (NextHop)
-		if row.NextHop.Family != 0 {
-			f := row.NextHop.Family
-			var gw net.IP
-			if f == windows.AF_INET {
-				b := (*[4]byte)(unsafe.Pointer(&row.NextHop.Data[0]))
-				gw = net.IPv4(b[0], b[1], b[2], b[3])
-			} else if f == windows.AF_INET6 {
-				b := (*[16]byte)(unsafe.Pointer(&row.NextHop.Data[1]))
-				gw = b[:]
-			}
-			nlRoute.Gw = gw
+		gwFamily := row.NextHop.Family
+		if gwFamily == windows.AF_INET {
+			gwPtr := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.NextHop))
+			nlRoute.Gw = gwPtr.Addr[:]
+		} else if gwFamily == windows.AF_INET6 {
+			gwPtr := (*windows.RawSockaddrInet6)(unsafe.Pointer(&row.NextHop))
+			nlRoute.Gw = gwPtr.Addr[:]
 		}
 
 		routes = append(routes, nlRoute)
@@ -416,54 +422,53 @@ func (a *SwiftInterface) routeToRow(route *netlink.Route) (*windows.MibIpForward
 	}
 
 	var row windows.MibIpForwardRow2
+
 	ret, _, _ := procInitializeIpForwardEntry.Call(uintptr(unsafe.Pointer(&row)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return nil, fmt.Errorf("failed to initialize ip forward entry: %w", err)
 	}
 
 	row.InterfaceLuid = luid.ToUint64()
-	row.InterfaceIndex = 0 // LUID takes precedence
 	row.Metric = uint32(route.Priority)
 	row.Protocol = mibIPForwardProtoNetMgmt
 	row.Origin = nlRouteOriginManual
 	row.ValidLifetime = 0xffffffff
 	row.PreferredLifetime = 0xffffffff
 
-	// Set Destination Prefix
-	if route.Dst != nil {
+	if route.Dst != nil && len(route.Dst.IP) > 0 {
 		ones, _ := route.Dst.Mask.Size()
 		row.DestinationPrefix.PrefixLength = uint8(ones)
 
 		if ipv4 := route.Dst.IP.To4(); ipv4 != nil {
-			row.DestinationPrefix.Prefix.Family = windows.AF_INET
-			copy((*[4]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[0]))[:], ipv4)
-		} else if ipv6 := route.Dst.IP.To16(); ipv6 != nil {
-			row.DestinationPrefix.Prefix.Family = windows.AF_INET6
-			copy((*[16]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[1]))[:], ipv6)
+			dstV4 := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.DestinationPrefix.Prefix))
+			dstV4.Family = windows.AF_INET
+			copy(dstV4.Addr[:], ipv4)
+		} else {
+			dstV6 := (*windows.RawSockaddrInet6)(unsafe.Pointer(&row.DestinationPrefix.Prefix))
+			dstV6.Family = windows.AF_INET6
+			copy(dstV6.Addr[:], route.Dst.IP.To16())
 		}
 	} else {
-		// Handle default route logic
+		row.DestinationPrefix.PrefixLength = 0
+
 		if route.Gw != nil {
 			if route.Gw.To4() != nil {
 				row.DestinationPrefix.Prefix.Family = windows.AF_INET
-				row.DestinationPrefix.PrefixLength = 0
 			} else {
 				row.DestinationPrefix.Prefix.Family = windows.AF_INET6
-				row.DestinationPrefix.PrefixLength = 0
 			}
-		} else {
-			return nil, errors.New("cannot determine address family for default route (dst=nil, gw=nil)")
 		}
 	}
 
-	// Set Next Hop (Gateway)
 	if route.Gw != nil {
 		if ipv4 := route.Gw.To4(); ipv4 != nil {
-			row.NextHop.Family = windows.AF_INET
-			copy((*[4]byte)(unsafe.Pointer(&row.NextHop.Data[0]))[:], ipv4)
-		} else if ipv6 := route.Gw.To16(); ipv6 != nil {
-			row.NextHop.Family = windows.AF_INET6
-			copy((*[16]byte)(unsafe.Pointer(&row.NextHop.Data[1]))[:], ipv6)
+			gwV4 := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.NextHop))
+			gwV4.Family = windows.AF_INET
+			copy(gwV4.Addr[:], ipv4)
+		} else {
+			gwV6 := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.NextHop))
+			gwV6.Family = windows.AF_INET6
+			copy(gwV6.Addr[:], route.Gw.To16())
 		}
 	}
 
