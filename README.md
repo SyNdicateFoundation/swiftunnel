@@ -76,7 +76,7 @@ func main() {
 	// 1. Define configuration using functional options
 	cfg, err := swiftconfig.New(
 		swiftconfig.WithAdapterName("SwiftunnelNode"),
-		swiftconfig.WithUnicastConfig("10.8.0.2/24"),
+		swiftconfig.WithUnicastIP("10.8.0.2/24"),
 		swiftconfig.WithMTU(1400),
 	)
 	if err != nil {
