@@ -331,6 +331,7 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 	}
 
 	var table *windows.MibIpForwardTable2
+
 	ret, _, _ := procGetIpForwardTable2.Call(
 		uintptr(family),
 		uintptr(unsafe.Pointer(&table)),
@@ -339,21 +340,17 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		return nil, fmt.Errorf("failed to get route table: %w", errno)
 	}
-
 	defer procFreeMibTable.Call(uintptr(unsafe.Pointer(table)))
 
 	if table.NumEntries == 0 {
 		return []netlink.Route{}, nil
 	}
 
+	rows := unsafe.Slice(&table.Table[0], table.NumEntries)
+
 	var routes []netlink.Route
-	rowSize := unsafe.Sizeof(windows.MibIpForwardRow2{})
-	base := uintptr(unsafe.Pointer(&table.Table[0]))
 
-	for i := uint32(0); i < table.NumEntries; i++ {
-		//goland:noinspection GoVetUnsafePointer
-		row := (*windows.MibIpForwardRow2)(unsafe.Pointer(base + uintptr(i)*rowSize))
-
+	for _, row := range rows {
 		if int(row.InterfaceIndex) != idx {
 			continue
 		}
@@ -364,31 +361,22 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 			Protocol:  netlink.RouteProtocol(row.Protocol),
 		}
 
-		prefixFamily := row.DestinationPrefix.Prefix.Family
-		var dstIP net.IP
-
-		if prefixFamily == windows.AF_INET {
-			addrPtr := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.DestinationPrefix.Prefix))
-			dstIP = addrPtr.Addr[:]
-		} else if prefixFamily == windows.AF_INET6 {
-			addrPtr := (*windows.RawSockaddrInet6)(unsafe.Pointer(&row.DestinationPrefix.Prefix))
-			dstIP = addrPtr.Addr[:]
-		}
-
+		dstIP, dstFamily := extractIP(&row.DestinationPrefix.Prefix)
 		if dstIP != nil {
 			nlRoute.Dst = &net.IPNet{
 				IP:   dstIP,
 				Mask: net.CIDRMask(int(row.DestinationPrefix.PrefixLength), 8*len(dstIP)),
 			}
+		} else {
+			if dstFamily == windows.AF_INET {
+				nlRoute.Dst = &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)}
+			} else if dstFamily == windows.AF_INET6 {
+				nlRoute.Dst = &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)}
+			}
 		}
 
-		gwFamily := row.NextHop.Family
-		if gwFamily == windows.AF_INET {
-			gwPtr := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.NextHop))
-			nlRoute.Gw = gwPtr.Addr[:]
-		} else if gwFamily == windows.AF_INET6 {
-			gwPtr := (*windows.RawSockaddrInet6)(unsafe.Pointer(&row.NextHop))
-			nlRoute.Gw = gwPtr.Addr[:]
+		if gwIP, _ := extractIP(&row.NextHop); gwIP != nil {
+			nlRoute.Gw = gwIP
 		}
 
 		routes = append(routes, nlRoute)
@@ -423,9 +411,9 @@ func (a *SwiftInterface) routeToRow(route *netlink.Route) (*windows.MibIpForward
 
 	var row windows.MibIpForwardRow2
 
-	ret, _, _ := procInitializeIpForwardEntry.Call(uintptr(unsafe.Pointer(&row)))
-	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
-		return nil, fmt.Errorf("failed to initialize ip forward entry: %w", err)
+	_, _, err = procInitializeIpForwardEntry.Call(uintptr(unsafe.Pointer(&row)))
+	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
+		return nil, fmt.Errorf("failed to initialize ip forward: %w", err)
 	}
 
 	row.InterfaceLuid = luid.ToUint64()
@@ -450,13 +438,14 @@ func (a *SwiftInterface) routeToRow(route *netlink.Route) (*windows.MibIpForward
 		}
 	} else {
 		row.DestinationPrefix.PrefixLength = 0
-
 		if route.Gw != nil {
 			if route.Gw.To4() != nil {
 				row.DestinationPrefix.Prefix.Family = windows.AF_INET
 			} else {
 				row.DestinationPrefix.Prefix.Family = windows.AF_INET6
 			}
+		} else {
+			row.DestinationPrefix.Prefix.Family = windows.AF_INET
 		}
 	}
 
@@ -466,11 +455,29 @@ func (a *SwiftInterface) routeToRow(route *netlink.Route) (*windows.MibIpForward
 			gwV4.Family = windows.AF_INET
 			copy(gwV4.Addr[:], ipv4)
 		} else {
-			gwV6 := (*windows.RawSockaddrInet4)(unsafe.Pointer(&row.NextHop))
+			gwV6 := (*windows.RawSockaddrInet6)(unsafe.Pointer(&row.NextHop))
 			gwV6.Family = windows.AF_INET6
 			copy(gwV6.Addr[:], route.Gw.To16())
 		}
 	}
 
 	return &row, nil
+}
+
+func extractIP(raw *windows.RawSockaddrInet) (net.IP, uint16) {
+	base := (*windows.RawSockaddrInet4)(unsafe.Pointer(raw))
+
+	switch base.Family {
+	case windows.AF_INET:
+		ip := make(net.IP, 4)
+		copy(ip, base.Addr[:])
+		return ip, windows.AF_INET
+	case windows.AF_INET6:
+		v6 := (*windows.RawSockaddrInet6)(unsafe.Pointer(raw))
+		ip := make(net.IP, 16)
+		copy(ip, v6.Addr[:])
+		return ip, windows.AF_INET6
+	default:
+		return nil, base.Family
+	}
 }
