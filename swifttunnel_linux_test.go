@@ -3,7 +3,8 @@
 package swiftunnel
 
 import (
-	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
 	"net"
 	"testing"
 )
@@ -14,7 +15,7 @@ func TestNewSwiftInterface(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	config := Config{
+	config := &swiftconfig.Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,
@@ -53,7 +54,7 @@ func TestNewSwiftInterface(t *testing.T) {
 }
 
 func TestSetMTU(t *testing.T) {
-	adapter, err := NewSwiftInterface(Config{
+	adapter, err := NewSwiftInterface(&swiftconfig.Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
 	})
@@ -69,7 +70,7 @@ func TestSetMTU(t *testing.T) {
 }
 
 func TestSetUnicastIpAddressEntry(t *testing.T) {
-	adapter, err := NewSwiftInterface(Config{
+	adapter, err := NewSwiftInterface(&swiftconfig.Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
 	})
@@ -98,7 +99,7 @@ func TestTunReadCloser_Read(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	config := Config{
+	config := &swiftconfig.Config{
 		AdapterName: "tun0",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,

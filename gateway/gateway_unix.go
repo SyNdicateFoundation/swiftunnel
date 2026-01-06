@@ -1,4 +1,4 @@
-//go:build linux
+//go:build unix
 
 package gateway
 
@@ -8,17 +8,17 @@ import (
 	"net"
 )
 
-// DiscoverGatewayIPv4 finds the IPv4 default gateway for Linux.
+// DiscoverGatewayIPv4 finds the IPv4 default gateway on Unix-like systems.
 func DiscoverGatewayIPv4() (net.IP, error) {
 	return discoverGateway(netlink.FAMILY_V4)
 }
 
-// DiscoverGatewayIPv6 finds the IPv6 default gateway for Linux.
+// DiscoverGatewayIPv6 finds the IPv6 default gateway on Unix-like systems.
 func DiscoverGatewayIPv6() (net.IP, error) {
 	return discoverGateway(netlink.FAMILY_V6)
 }
 
-// discoverGateway finds the default gateway for the specified IP family.
+// discoverGateway iterates through the routing table to find the gateway for the specified family.
 func discoverGateway(family int) (net.IP, error) {
 	routes, err := netlink.RouteList(nil, family)
 	if err != nil {
@@ -26,7 +26,6 @@ func discoverGateway(family int) (net.IP, error) {
 	}
 
 	for _, route := range routes {
-		// Check for default route by ensuring Dst is either nil or a zero-length prefix
 		if (route.Dst == nil || route.Dst.IP.IsUnspecified()) && route.Gw != nil {
 			return route.Gw, nil
 		}

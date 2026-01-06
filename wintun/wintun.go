@@ -3,15 +3,19 @@
 package wintun
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"golang.org/x/sys/windows"
+	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
-
-	"golang.org/x/sys/windows"
 )
 
 var (
@@ -37,50 +41,69 @@ var (
 )
 
 var (
-	once       sync.Once
-	errInitDLL error
+	dllInitOnce sync.Once
+	dllInitErr  error
 )
 
-//goland:noinspection GoErrorStringFormat
 var (
-	ErrInvalidAdapterHandle = errors.New("adapter handle is invalid")
-	ErrInvalidSessionHandle = errors.New("session handle is invalid")
+	ErrInvalidAdapterHandle = errors.New("adapter handle is invalid or closed")
+	ErrInvalidSessionHandle = errors.New("session handle is invalid or closed")
 	ErrEmptyPacket          = errors.New("packet cannot be empty")
-	ErrNoDataAvailable      = errors.New("No more data is available.")
-	ErrFailedToReceive      = errors.New("failed to receive Wintun packet")
+	ErrNoDataAvailable      = errors.New("no more data is available")
+	ErrBufferTooSmall       = errors.New("destination buffer is too small")
 )
 
-func init() {
-	once.Do(func() {
-		errInitDLL = loadWintunDLL()
+// ensureDLL extracts the embedded Wintun DLL to a cache directory and loads it.
+func ensureDLL() error {
+	dllInitOnce.Do(func() {
+		hash := sha256.Sum256(wintunDLLData)
+		hexHash := hex.EncodeToString(hash[:])
 
-		runtime.SetFinalizer(wintunDLL, func(dll *windows.DLL) {
-			UninstallWintun()
-		})
+		localAppData, err := os.UserCacheDir()
+		if err != nil {
+			dllInitErr = err
+			return
+		}
+
+		dirPath := filepath.Join(localAppData, "swiftunnel", "driver", hexHash)
+		dllPath := filepath.Join(dirPath, "wintun.dll")
+
+		valid := false
+		if f, err := os.Open(dllPath); err == nil {
+			h := sha256.New()
+			if _, err := io.Copy(h, f); err == nil {
+				if hex.EncodeToString(h.Sum(nil)) == hexHash {
+					valid = true
+				}
+			}
+			f.Close()
+		}
+
+		if !valid {
+			os.Remove(dllPath)
+
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				dllInitErr = fmt.Errorf("failed to create dir: %w", err)
+				return
+			}
+			if err := os.WriteFile(dllPath, wintunDLLData, 0600); err != nil {
+				dllInitErr = fmt.Errorf("failed to write dll: %w", err)
+				return
+			}
+		}
+
+		wintunDLL, err = windows.LoadDLL(dllPath)
+		if err != nil {
+			dllInitErr = err
+			return
+		}
+
+		dllInitErr = loadWintunFunctions()
 	})
+	return dllInitErr
 }
 
-func loadWintunDLL() error {
-	dllFile, err := os.CreateTemp("", "wintun_*.dll")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file for Wintun DLL: %w", err)
-	}
-
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(dllFile.Name())
-
-	if _, err := dllFile.Write(wintunDLLData); err != nil {
-		return fmt.Errorf("failed to write Wintun DLL data: %w", err)
-	}
-	if err := dllFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	wintunDLL = windows.MustLoadDLL(dllFile.Name())
-	return loadWintunFunctions()
-}
-
+// loadWintunFunctions maps exported symbols from wintun.dll to internal Go variables.
 func loadWintunFunctions() error {
 	procs := map[string]**windows.Proc{
 		"WintunCreateAdapter":           &wintunCreateAdapterFunc,
@@ -99,33 +122,37 @@ func loadWintunFunctions() error {
 	for name, proc := range procs {
 		*proc = wintunDLL.MustFindProc(name)
 		if *proc == nil {
-			return fmt.Errorf("failed to load procedure %s", name)
+			return fmt.Errorf("failed to find procedure %s", name)
 		}
 	}
 	return nil
 }
 
-//goland:noinspection GoNameStartsWithPackageName
+// WintunAdapter represents a handle to a Wintun network interface.
 type WintunAdapter struct {
 	name       string
 	tunnelType string
 	handle     uintptr
+	closed     atomic.Bool
 }
 
-//goland:noinspection GoNameStartsWithPackageName
+// WintunSession represents an active high-performance ring-buffer session on a Wintun adapter.
 type WintunSession struct {
-	*WintunAdapter
+	adapter   *WintunAdapter
 	handle    uintptr
 	waitEvent windows.Handle
+	closed    atomic.Bool
 }
 
+// NewWintunAdapter creates a new adapter with a default GUID.
 func NewWintunAdapter(name, tunnelType string) (*WintunAdapter, error) {
 	return NewWintunAdapterWithGUID(name, tunnelType, swiftypes.NilGUID)
 }
 
+// NewWintunAdapterWithGUID initializes a Wintun adapter with a specific name and GUID.
 func NewWintunAdapterWithGUID(name, tunnelType string, componentID swiftypes.GUID) (*WintunAdapter, error) {
-	if errInitDLL != nil {
-		return nil, fmt.Errorf("wintun DLL initialization failed: %w", errInitDLL)
+	if err := ensureDLL(); err != nil {
+		return nil, err
 	}
 
 	if name == "" {
@@ -133,19 +160,15 @@ func NewWintunAdapterWithGUID(name, tunnelType string, componentID swiftypes.GUI
 	}
 
 	if tunnelType == "" {
-		tunnelType = "VPN Tunnel"
+		tunnelType = "VPN"
 	}
 
-	namePtr, err := windows.UTF16PtrFromString(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert adapter name: %w", err)
-	}
-	tunnelTypePtr, err := windows.UTF16PtrFromString(tunnelType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert tunnel type: %w", err)
-	}
+	namePtr, _ := windows.UTF16PtrFromString(name)
+	tunnelTypePtr, _ := windows.UTF16PtrFromString(tunnelType)
 
 	var handle uintptr
+	var err error
+
 	if componentID != swiftypes.NilGUID {
 		handle, _, err = wintunCreateAdapterFunc.Call(
 			uintptr(unsafe.Pointer(namePtr)),
@@ -161,191 +184,254 @@ func NewWintunAdapterWithGUID(name, tunnelType string, componentID swiftypes.GUI
 	}
 
 	if handle == 0 {
-		return nil, fmt.Errorf("failed to create Wintun adapter: %v", err)
+		return nil, fmt.Errorf("failed to create adapter: %w", err)
 	}
 
-	a := &WintunAdapter{
+	adapter := &WintunAdapter{
 		name:       name,
 		tunnelType: tunnelType,
 		handle:     handle,
 	}
 
-	runtime.SetFinalizer(a, func(a *WintunAdapter) {
-		_ = a.Close()
+	runtime.SetFinalizer(adapter, func(a *WintunAdapter) {
+		a.Close()
 	})
 
-	return a, nil
+	return adapter, nil
 }
 
+// Close terminates the Wintun adapter and releases the driver handle.
 func (a *WintunAdapter) Close() error {
-	if a.handle == 0 {
-		return ErrInvalidAdapterHandle
-	}
-
-	if _, _, err := wintunCloseAdapterFunc.Call(a.handle); err != nil && !errors.Is(err, windows.NOERROR) {
-		return fmt.Errorf("failed to close Wintun adapter: %v", err)
+	if a.closed.Swap(true) {
+		return nil
 	}
 
 	runtime.SetFinalizer(a, nil)
 
+	if a.handle == 0 {
+		return ErrInvalidAdapterHandle
+	}
+
+	_, _, err := wintunCloseAdapterFunc.Call(a.handle)
+	if !errors.Is(err, windows.NOERROR) {
+		return fmt.Errorf("failed to close adapter: %v", err)
+	}
+
+	a.handle = 0
+
 	return nil
 }
 
+// StartSession initializes the ring buffer for the adapter.
 func (a *WintunAdapter) StartSession(capacity uint32) (*WintunSession, error) {
-	if a.handle == 0 {
+	if a.closed.Load() || a.handle == 0 {
 		return nil, ErrInvalidAdapterHandle
 	}
 
 	handle, _, err := wintunStartSessionFunc.Call(a.handle, uintptr(capacity))
 	if handle == 0 {
-		return nil, fmt.Errorf("failed to start Wintun session: %v", err)
+		return nil, fmt.Errorf("failed to start session: %v", err)
 	}
 
 	waitEvent, _, err := wintunGetReadWaitEventFunc.Call(handle)
 	if err != nil && !errors.Is(err, windows.NOERROR) {
-		return nil, fmt.Errorf("failed to create wait event: %v", err)
+		wintunEndSessionFunc.Call(handle)
+		return nil, fmt.Errorf("failed to get wait event: %v", err)
 	}
 
-	s := &WintunSession{handle: handle, waitEvent: windows.Handle(waitEvent), WintunAdapter: a}
+	session := &WintunSession{
+		adapter:   a,
+		handle:    handle,
+		waitEvent: windows.Handle(waitEvent),
+	}
 
-	runtime.SetFinalizer(s, func(s *WintunSession) {
-		_ = s.Close()
+	runtime.SetFinalizer(session, func(s *WintunSession) {
+		s.Close()
 	})
 
-	return s, nil
+	return session, nil
 }
 
+// Close terminates the Wintun session and ends the ring buffer communication.
 func (s *WintunSession) Close() error {
-	defer runtime.SetFinalizer(s, nil)
+	if s.closed.Swap(true) {
+		return nil
+	}
+
+	runtime.SetFinalizer(s, nil)
 
 	if s.handle == 0 {
 		return ErrInvalidSessionHandle
 	}
 
-	if _, _, err := wintunEndSessionFunc.Call(s.handle); err != nil && !errors.Is(err, windows.NOERROR) {
-		return fmt.Errorf("failed to end Wintun session: %v", err)
-	}
+	_, _, err := wintunEndSessionFunc.Call(s.handle)
+	s.handle = 0
 
-	return s.WintunAdapter.Close()
+	if !errors.Is(err, windows.NOERROR) {
+		return fmt.Errorf("failed to end session: %v", err)
+	}
+	return s.adapter.Close()
 }
 
+// Write allocates space in the ring buffer and copies the packet for transmission.
+//
+//goland:noinspection GoVetUnsafePointer
 func (s *WintunSession) Write(buf []byte) (int, error) {
-	if s.handle == 0 {
+	if s.closed.Load() {
 		return 0, ErrInvalidSessionHandle
 	}
-
 	if len(buf) == 0 {
 		return 0, ErrEmptyPacket
 	}
 
 	dataPtr, _, err := wintunAllocateSendPacketFunc.Call(s.handle, uintptr(len(buf)))
-	if (err != nil && !errors.Is(err, windows.NOERROR)) || dataPtr == 0 {
-		return 0, fmt.Errorf("failed to allocate Wintun buf: %v", err)
+	if dataPtr == 0 {
+		return 0, fmt.Errorf("ring buffer full or error: %v", err)
 	}
 
 	//goland:noinspection GoRedundantConversion
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(dataPtr)), len(buf)), buf)
+	dst := unsafe.Slice((*byte)(unsafe.Pointer(dataPtr)), len(buf))
+	copy(dst, buf)
 
-	if _, _, err := wintunSendPacketFunc.Call(s.handle, dataPtr, uintptr(len(buf))); err != nil && !errors.Is(err, windows.NOERROR) {
-		return 0, fmt.Errorf("failed to send Wintun buf: %v", err)
+	_, _, err = wintunSendPacketFunc.Call(s.handle, dataPtr)
+	if !errors.Is(err, windows.NOERROR) {
+		return 0, fmt.Errorf("failed to send packet: %v", err)
 	}
 
 	return len(buf), nil
 }
 
+// ReadNow attempts a non-blocking read from the Wintun ring buffer.
 func (s *WintunSession) ReadNow(buf []byte) (int, error) {
-	if s.handle == 0 {
+	if s.closed.Load() {
 		return 0, ErrInvalidSessionHandle
 	}
 
 	var packetSize uint32
 	packetPtr, _, err := wintunReceivePacketFunc.Call(s.handle, uintptr(unsafe.Pointer(&packetSize)))
-	if packetPtr == 0 || !errors.Is(err, windows.NOERROR) {
-		if err != nil {
-			if err.Error() == "No more data is available." {
-				return 0, ErrNoDataAvailable
-			}
-		} else {
-			return 0, ErrFailedToReceive
+
+	if packetPtr == 0 {
+		if err != nil && err.Error() == "No more data is available." {
+			return 0, ErrNoDataAvailable
+		}
+		if !errors.Is(err, windows.NOERROR) {
+			return 0, err
+		}
+		return 0, ErrNoDataAvailable
+	}
+
+	defer wintunReleaseReceivePacketFunc.Call(s.handle, packetPtr)
+
+	if int(packetSize) > len(buf) {
+		return 0, ErrBufferTooSmall
+	}
+
+	//goland:noinspection GoRedundantConversion,GoVetUnsafePointer
+	src := unsafe.Slice((*byte)(unsafe.Pointer(packetPtr)), packetSize)
+	copy(buf, src)
+
+	return int(packetSize), nil
+}
+
+// Read performs a blocking read from the Wintun session, waiting on the driver event.
+func (s *WintunSession) Read(buf []byte) (int, error) {
+	for {
+		if s.closed.Load() {
+			return 0, ErrInvalidSessionHandle
+		}
+
+		n, err := s.ReadNow(buf)
+		if err == nil {
+			return n, nil
+		}
+		if !errors.Is(err, ErrNoDataAvailable) {
+			return 0, err
+		}
+
+		event, _ := windows.WaitForSingleObject(s.waitEvent, 100)
+
+		if event == uint32(windows.WAIT_TIMEOUT) {
+			continue
+		}
+
+		if event == windows.WAIT_FAILED {
+			return 0, errors.New("wait failed")
 		}
 	}
-
-	//goland:noinspection GoRedundantConversion
-	n := copy(buf, unsafe.Slice((*byte)(unsafe.Pointer(packetPtr)), packetSize))
-
-	if _, _, err := wintunReleaseReceivePacketFunc.Call(s.handle, packetPtr); err != nil && !errors.Is(err, windows.NOERROR) {
-		return 0, fmt.Errorf("failed to release received packet: %v", err)
-	}
-
-	return n, nil
 }
 
-func (s *WintunSession) Read(buf []byte) (int, error) {
-	n, err := s.ReadNow(buf)
-	if err == nil || !errors.Is(err, ErrNoDataAvailable) {
-		return n, err
-	}
-
-	if result, _ := windows.WaitForSingleObject(s.waitEvent, windows.INFINITE); result != windows.WAIT_OBJECT_0 {
-		return 0, fmt.Errorf("wait event failed: unexpected result %v", result)
-	}
-
-	return s.Read(buf)
+// GetFD returns nil as Wintun uses a custom ring buffer rather than a standard file descriptor.
+func (s *WintunSession) GetFD() *os.File {
+	return s.adapter.GetFD()
 }
 
-func (a *WintunAdapter) GetRunningDriverVersion() (string, error) {
-	if a.handle == 0 {
-		return "", ErrInvalidAdapterHandle
-	}
-
-	version, _, err := wintunGetRunningDriverVersionFunc.Call()
-	if err != nil && !errors.Is(err, windows.NOERROR) {
-		return "", fmt.Errorf("failed to get Wintun driver version: %v", err)
-	}
-
-	return fmt.Sprintf("%d.%d", version>>16&0xff, version&0xff), nil
+// GetAdapterName retrieves the adapter name from the parent structure.
+func (s *WintunSession) GetAdapterName() (string, error) {
+	return s.adapter.GetAdapterName()
 }
 
+// GetAdapterIndex retrieves the interface index via the parent adapter.
+func (s *WintunSession) GetAdapterIndex() (int, error) {
+	return s.adapter.GetAdapterIndex()
+}
+
+// GetAdapterLUID retrieves the Windows LUID via the parent adapter.
+func (s *WintunSession) GetAdapterLUID() (swiftypes.LUID, error) {
+	return s.adapter.GetAdapterLUID()
+}
+
+// GetAdapterGUID retrieves the Windows GUID via the parent adapter.
+func (s *WintunSession) GetAdapterGUID() (swiftypes.GUID, error) {
+	return s.adapter.GetAdapterGUID()
+}
+
+// GetFD returns nil for the adapter.
 func (a *WintunAdapter) GetFD() *os.File {
 	return nil
 }
 
+// GetAdapterName returns the friendly name of the adapter.
 func (a *WintunAdapter) GetAdapterName() (string, error) {
 	return a.name, nil
 }
 
+// GetAdapterLUID uses the Wintun API to fetch the 64-bit LUID.
 func (a *WintunAdapter) GetAdapterLUID() (swiftypes.LUID, error) {
 	if a.handle == 0 {
 		return swiftypes.NilLUID, ErrInvalidAdapterHandle
 	}
 
 	var luid64 uint64
-	if _, _, err := wintunGetAdapterLUIDFunc.Call(a.handle, uintptr(unsafe.Pointer(&luid64))); err != nil && !errors.Is(err, windows.NOERROR) {
-		return swiftypes.NilLUID, fmt.Errorf("failed to retrieve adapter LUID: %v", err)
+
+	_, _, err := wintunGetAdapterLUIDFunc.Call(a.handle, uintptr(unsafe.Pointer(&luid64)))
+	if !errors.Is(err, windows.NOERROR) {
+		return swiftypes.NilLUID, fmt.Errorf("failed to get LUID: %v", err)
 	}
 
 	return swiftypes.NewLUID(luid64), nil
 }
 
+// GetAdapterGUID converts the adapter LUID to a GUID using IP Helper.
 func (a *WintunAdapter) GetAdapterGUID() (swiftypes.GUID, error) {
-	if a.handle == 0 {
-		return swiftypes.NilGUID, ErrInvalidAdapterHandle
-	}
-
 	luid, err := a.GetAdapterLUID()
 	if err != nil {
 		return swiftypes.NilGUID, err
 	}
 
-	var retrievedGUID swiftypes.GUID
+	var guid swiftypes.GUID
+	_, _, err = convertInterfaceLuidToGuid.Call(
+		uintptr(unsafe.Pointer(&luid)),
+		uintptr(unsafe.Pointer(&guid)),
+	)
 
-	if _, _, err := convertInterfaceLuidToGuid.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&retrievedGUID))); err != nil && !errors.Is(err, windows.NOERROR) {
-		return swiftypes.NilGUID, fmt.Errorf("failed to convert LUID to GUID: %v", err)
+	if err != nil && !errors.Is(err, windows.NOERROR) {
+		return swiftypes.NilGUID, fmt.Errorf("ConvertInterfaceLuidToGuid failed: %w", err)
 	}
 
-	return retrievedGUID, nil
+	return guid, nil
 }
 
+// GetAdapterIndex converts the adapter LUID to an IP IF index.
 func (a *WintunAdapter) GetAdapterIndex() (int, error) {
 	luid, err := a.GetAdapterLUID()
 	if err != nil {
@@ -353,17 +439,31 @@ func (a *WintunAdapter) GetAdapterIndex() (int, error) {
 	}
 
 	var index uint32
-	if _, _, err := convertLUIDToIndex.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&index))); err != nil && !errors.Is(err, windows.NOERROR) {
-		return 0, fmt.Errorf("failed to convert LUID to index: %v", err)
+	ret, _, _ := convertLUIDToIndex.Call(
+		uintptr(unsafe.Pointer(&luid)),
+		uintptr(unsafe.Pointer(&index)),
+	)
+	if ret != 0 {
+		return 0, fmt.Errorf("ConvertInterfaceLuidToIndex failed: %d", ret)
 	}
-
 	return int(index), nil
 }
 
-func UninstallWintun() {
-	if _, _, err := wintunDeleteDriverFunc.Call(); err != nil {
-		return
+// GetRunningDriverVersion retrieves the version string from the loaded driver.
+func (a *WintunAdapter) GetRunningDriverVersion() (string, error) {
+	if err := ensureDLL(); err != nil {
+		return "", err
 	}
+	v, _, _ := wintunGetRunningDriverVersionFunc.Call()
+	if v == 0 {
+		return "", errors.New("failed to get driver version")
+	}
+	return fmt.Sprintf("%d.%d", (v>>16)&0xFF, v&0xFF), nil
+}
 
-	runtime.SetFinalizer(wintunDLL, nil)
+// UninstallWintun attempts to remove the Wintun driver from the system.
+func UninstallWintun() {
+	if wintunDeleteDriverFunc != nil {
+		wintunDeleteDriverFunc.Call()
+	}
 }

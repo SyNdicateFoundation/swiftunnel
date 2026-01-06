@@ -3,7 +3,8 @@
 package swiftunnel
 
 import (
-	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
 	"io"
 	"os"
 	"strings"
@@ -17,13 +18,15 @@ type ifReq struct {
 	_     [0x28 - 0x10 - 2]byte
 }
 
+// SwiftInterface represents a Linux TUN/TAP device.
 type SwiftInterface struct {
 	io.ReadWriteCloser
 	name        string
 	adapterType swiftypes.AdapterType
 }
 
-func (a *SwiftInterface) initializeAdapter(config Config, fd uintptr) (string, error) {
+// initializeAdapter configures the flags and creates the Linux interface via ioctl.
+func (a *SwiftInterface) initializeAdapter(config *swiftconfig.Config, fd uintptr) (string, error) {
 	flags := syscall.IFF_NO_PI
 
 	if config.AdapterType == swiftypes.AdapterTypeTUN {
@@ -48,6 +51,7 @@ func (a *SwiftInterface) initializeAdapter(config Config, fd uintptr) (string, e
 	return ifName, nil
 }
 
+// createInterface sends the TUNSETIFF ioctl to create the virtual device.
 func (a *SwiftInterface) createInterface(fd uintptr, ifName string, flags uint16) (string, error) {
 	var req ifReq
 
@@ -61,7 +65,8 @@ func (a *SwiftInterface) createInterface(fd uintptr, ifName string, flags uint16
 	return strings.TrimRight(string(req.Name[:]), "\x00"), nil
 }
 
-func (a *SwiftInterface) setDeviceOptions(fd uintptr, config Config) error {
+// setDeviceOptions configures persistence and ownership permissions.
+func (a *SwiftInterface) setDeviceOptions(fd uintptr, config *swiftconfig.Config) error {
 	if config.Permissions != nil {
 		if err := ioctl(fd, syscall.TUNSETOWNER, uintptr(config.Permissions.Owner)); err != nil {
 			return err
@@ -75,14 +80,17 @@ func (a *SwiftInterface) setDeviceOptions(fd uintptr, config Config) error {
 	if config.Persist {
 		persistFlag = 1
 	}
+
 	return ioctl(fd, syscall.TUNSETPERSIST, uintptr(persistFlag))
 }
 
+// GetFD returns the underlying OS file pointer.
 func (a *SwiftInterface) GetFD() *os.File {
 	return a.ReadWriteCloser.(*os.File)
 }
 
-func NewSwiftInterface(config Config) (*SwiftInterface, error) {
+// NewSwiftInterface opens /dev/net/tun and initializes the SwiftInterface.
+func NewSwiftInterface(config *swiftconfig.Config) (*SwiftInterface, error) {
 	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR, 0)
 	if err != nil {
 		return nil, err

@@ -5,16 +5,18 @@ package swiftunnel
 import (
 	"errors"
 	"fmt"
-	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"io"
 	"math"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 )
 
+// SwiftInterface represents a macOS network tunnel interface.
 type SwiftInterface struct {
 	*tunReadCloser
 	name        string
@@ -22,10 +24,11 @@ type SwiftInterface struct {
 }
 
 const (
-	appleUTUNCtl      = "com.apple.net.utun_control"
-	appleCTLIOCGINFO  = (0x40000000 | 0x80000000) | ((100 & 0x1fff) << 16) | uint32(byte('N'))<<8 | 3
-	sockaddrCtlSize   = 32
-	maxAdapterNameLen = 15
+	appleUTUNCtl       = "com.apple.net.utun_control"
+	appleCTLIOCGINFO   = (0x40000000 | 0x80000000) | ((100 & 0x1fff) << 16) | uint32(byte('N'))<<8 | 3
+	sockaddrCtlSize    = 32
+	maxAdapterNameLen  = 15
+	internalBufferSize = 2048
 )
 
 type sockaddrCtl struct {
@@ -37,7 +40,8 @@ type sockaddrCtl struct {
 	scReserved [5]uint32
 }
 
-func openDevSystem(config Config) (*SwiftInterface, error) {
+// openDevSystem initializes a native macOS utun interface.
+func openDevSystem(config swiftconfig.Config) (*SwiftInterface, error) {
 	if config.AdapterType != swiftypes.AdapterTypeTUN {
 		return nil, errors.New("only TUN is supported for SystemDriver; use TunTapOSXDriver for TAP")
 	}
@@ -91,6 +95,7 @@ func openDevSystem(config Config) (*SwiftInterface, error) {
 	}, nil
 }
 
+// parseUtunIndex extracts the integer index from an utun device name.
 func parseUtunIndex(name string) (int, error) {
 	const utunPrefix = "utun"
 	if !strings.HasPrefix(name, utunPrefix) {
@@ -104,7 +109,8 @@ func parseUtunIndex(name string) (int, error) {
 	return index, nil
 }
 
-func openDevTunTapOSX(config Config) (*SwiftInterface, error) {
+// openDevTunTapOSX initializes a third-party TunTapOSX driver interface.
+func openDevTunTapOSX(config swiftconfig.Config) (*SwiftInterface, error) {
 	if len(config.AdapterName) >= maxAdapterNameLen {
 		return nil, errors.New("device name is too long")
 	}
@@ -135,6 +141,7 @@ func openDevTunTapOSX(config Config) (*SwiftInterface, error) {
 	}, nil
 }
 
+// connect performs a system call to connect the control socket.
 func connect(fd int, addr *sockaddrCtl) error {
 	_, _, errno := syscall.RawSyscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(addr)), sockaddrCtlSize)
 	if errno != 0 {
@@ -143,6 +150,7 @@ func connect(fd int, addr *sockaddrCtl) error {
 	return nil
 }
 
+// getIfName retrieves the actual interface name assigned by the system.
 func getIfName(fd int) (string, error) {
 	var ifName [16]byte
 	ifNameSize := uintptr(len(ifName))
@@ -154,6 +162,7 @@ func getIfName(fd int) (string, error) {
 	return string(ifName[:ifNameSize-1]), nil
 }
 
+// setIfUp configures the interface status to UP and RUNNING.
 func setIfUp(fd uintptr, ifName string) error {
 	var ifReq = struct {
 		ifName    [16]byte
@@ -167,65 +176,78 @@ func setIfUp(fd uintptr, ifName string) error {
 }
 
 type tunReadCloser struct {
-	f    *os.File
-	rMu  sync.Mutex
-	rBuf []byte
-	wMu  sync.Mutex
-	wBuf []byte
+	f *os.File
 }
 
+// Read implements the io.Reader interface for the macOS tunnel, handling the 4-byte PI header.
 func (t *tunReadCloser) Read(to []byte) (int, error) {
-	t.rMu.Lock()
-	defer t.rMu.Unlock()
+	buf := make([]byte, internalBufferSize)
 
-	if cap(t.rBuf) < len(to)+4 {
-		t.rBuf = make([]byte, len(to)+4)
+	n, err := t.f.Read(buf)
+	if err != nil {
+		return 0, err
 	}
-	t.rBuf = t.rBuf[:len(to)+4]
 
-	n, err := t.f.Read(t.rBuf)
-	copy(to, t.rBuf[4:])
-	return n - 4, err
+	if n <= 4 {
+		return 0, nil
+	}
+
+	payloadLen := n - 4
+	if len(to) < payloadLen {
+		return 0, io.ErrShortBuffer
+	}
+
+	copy(to, buf[4:n])
+	return payloadLen, nil
 }
 
+// Write implements the io.Writer interface for the macOS tunnel, prepending the 4-byte PI header.
 func (t *tunReadCloser) Write(from []byte) (int, error) {
 	if len(from) == 0 {
-		return 0, syscall.EIO
+		return 0, nil
 	}
 
-	t.wMu.Lock()
-	defer t.wMu.Unlock()
-
-	if cap(t.wBuf) < len(from)+4 {
-		t.wBuf = make([]byte, len(from)+4)
-	}
-	t.wBuf = t.wBuf[:len(from)+4]
-
-	switch ipVer := from[0] >> 4; ipVer {
+	var proto uint32
+	switch from[0] >> 4 {
 	case 4:
-		t.wBuf[3] = syscall.AF_INET
+		proto = syscall.AF_INET
 	case 6:
-		t.wBuf[3] = syscall.AF_INET6
+		proto = syscall.AF_INET6
 	default:
-		return 0, errors.New("invalid IP version")
+		return 0, errors.New("unknown ip version")
 	}
 
-	copy(t.wBuf[4:], from)
-	n, err := t.f.Write(t.wBuf)
-	return n - 4, err
+	totalLen := len(from) + 4
+	buf := make([]byte, totalLen)
+
+	buf[0] = 0
+	buf[1] = 0
+	buf[2] = 0
+	buf[3] = byte(proto)
+
+	copy(buf[4:], from)
+
+	n, err := t.f.Write(buf)
+	if n >= 4 {
+		return n - 4, err
+	}
+	return 0, err
 }
 
+// Close releases the underlying file descriptor.
 func (t *tunReadCloser) Close() error {
 	return t.f.Close()
 }
 
+// GetFD returns the underlying OS file object.
 func (a *SwiftInterface) GetFD() *os.File {
 	return a.tunReadCloser.f
 }
 
-func NewSwiftInterface(config Config) (*SwiftInterface, error) {
+// NewSwiftInterface creates and configures a new macOS SwiftInterface based on the driver type.
+func NewSwiftInterface(config *swiftconfig.Config) (*SwiftInterface, error) {
 	switch config.DriverType {
-	case DriverTypeTunTapOSX:
+	case swiftconfig.DriverTypeTunTapOSX:
 		tapOSX, err := openDevTunTapOSX(config)
 		if config.UnicastConfig == nil {
 			if err = tapOSX.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
@@ -240,7 +262,7 @@ func NewSwiftInterface(config Config) (*SwiftInterface, error) {
 		}
 
 		return tapOSX, err
-	case DriverTypeSystem:
+	case swiftconfig.DriverTypeSystem:
 		system, err := openDevSystem(config)
 		if config.UnicastConfig == nil {
 			if err = system.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {

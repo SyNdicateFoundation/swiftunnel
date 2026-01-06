@@ -1,16 +1,17 @@
-//go:build !windows
+//go:build unix
 
 package swiftunnel
 
 import (
 	"errors"
 	"fmt"
-	"github.com/XenonCommunity/swiftunnel/swiftypes"
+	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
 	"github.com/vishvananda/netlink"
 	"os"
 	"syscall"
 )
 
+// ioctl performs a system-level I/O control operation.
 func ioctl(fd uintptr, request uintptr, argv uintptr) error {
 	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, request, argv); errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
@@ -18,6 +19,7 @@ func ioctl(fd uintptr, request uintptr, argv uintptr) error {
 	return nil
 }
 
+// GetAdapterName returns the current name of the Unix interface.
 func (a *SwiftInterface) GetAdapterName() (string, error) {
 	if a.name == "" {
 		return "", errors.New("adapter name is not set")
@@ -25,6 +27,7 @@ func (a *SwiftInterface) GetAdapterName() (string, error) {
 	return a.name, nil
 }
 
+// GetAdapterIndex retrieves the system-wide link index of the interface.
 func (a *SwiftInterface) GetAdapterIndex() (int, error) {
 	if a.name == "" {
 		return 0, errors.New("adapter name is not set")
@@ -38,6 +41,7 @@ func (a *SwiftInterface) GetAdapterIndex() (int, error) {
 	return ifi.Attrs().Index, nil
 }
 
+// SetMTU updates the Maximum Transmission Unit for the Unix interface.
 func (a *SwiftInterface) SetMTU(mtu int) error {
 	index, err := a.GetAdapterIndex()
 	if err != nil {
@@ -56,6 +60,7 @@ func (a *SwiftInterface) SetMTU(mtu int) error {
 	return nil
 }
 
+// SetUnicastIpAddressEntry assigns an IP address and optional gateway to the interface.
 func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
 	index, err := a.GetAdapterIndex()
 	if err != nil {
@@ -85,6 +90,7 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	return nil
 }
 
+// SetStatus toggles the interface between Up and Down states.
 func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
 	index, err := a.GetAdapterIndex()
 	if err != nil {
@@ -106,6 +112,7 @@ func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
 	return nil
 }
 
+// AddRoute adds a network route via the current interface.
 func (a *SwiftInterface) AddRoute(route *netlink.Route) error {
 	index, err := a.GetAdapterIndex()
 	if err != nil {
@@ -121,6 +128,7 @@ func (a *SwiftInterface) AddRoute(route *netlink.Route) error {
 	return nil
 }
 
+// SetDNS is currently unsupported on Unix-like SwiftInterfaces.
 func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	return errors.New("DNS configuration not supported on this platform")
 }
