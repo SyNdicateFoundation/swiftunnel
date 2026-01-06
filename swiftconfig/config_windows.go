@@ -5,6 +5,7 @@ package swiftconfig
 import (
 	"errors"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"golang.org/x/sys/windows"
 	"net"
 )
 
@@ -100,8 +101,8 @@ func WithDNSConfig(dnsConfig *swiftypes.DNSConfig) Option {
 	}
 }
 
-// WithUnicastConfig sets the CIDR address.
-func WithUnicastConfig(ipStr string) Option {
+// WithUnicastIP sets the CIDR address.
+func WithUnicastIP(ipStr string) Option {
 	return func(c *Config) error {
 		ip, ipNet, err := net.ParseCIDR(ipStr)
 		if err != nil {
@@ -109,10 +110,19 @@ func WithUnicastConfig(ipStr string) Option {
 		}
 
 		c.UnicastConfig = &swiftypes.UnicastConfig{
-			IP:    ip,
-			IPNet: ipNet,
+			IP:       ip,
+			DadState: windows.IpDadStatePreferred,
+			IPNet:    ipNet,
 		}
 
+		return nil
+	}
+}
+
+// WithUnicastConfig parses a CIDR string into an IP and Network mask.
+func WithUnicastConfig(unicast *swiftypes.UnicastConfig) Option {
+	return func(c *Config) error {
+		c.UnicastConfig = unicast
 		return nil
 	}
 }
@@ -129,8 +139,8 @@ func WithMTU(mtu int) Option {
 	}
 }
 
-// WithGUID assigns a specific GUID to the adapter.
-func WithGUID(guidStr string) Option {
+// WithGUIDStr assigns a specific GUID to the adapter.
+func WithGUIDStr(guidStr string) Option {
 	return func(c *Config) error {
 		g, err := swiftypes.ParseGUID(guidStr)
 		if err != nil {
@@ -139,6 +149,14 @@ func WithGUID(guidStr string) Option {
 
 		c.AdapterGUID = g
 
+		return nil
+	}
+}
+
+// WithGUID assigns a specific GUID to the adapter.
+func WithGUID(guid swiftypes.GUID) Option {
+	return func(c *Config) error {
+		c.AdapterGUID = guid
 		return nil
 	}
 }

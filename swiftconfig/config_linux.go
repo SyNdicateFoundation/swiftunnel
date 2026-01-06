@@ -100,8 +100,8 @@ func WithPermissions(permissions *Permissions) Option {
 	}
 }
 
-// WithUnicastConfig parses and sets the primary IP/Subnet.
-func WithUnicastConfig(ipStr string) Option {
+// WithUnicastIP parses and sets the primary IP/Subnet.
+func WithUnicastIP(ipStr string) Option {
 	return func(c *Config) error {
 		ip, ipNet, err := net.ParseCIDR(ipStr)
 		if err != nil {
@@ -112,6 +112,14 @@ func WithUnicastConfig(ipStr string) Option {
 			IP:    ip,
 			IPNet: ipNet,
 		}
+		return nil
+	}
+}
+
+// WithUnicastConfig parses a CIDR string into an IP and Network mask.
+func WithUnicastConfig(unicast *swiftypes.UnicastConfig) Option {
+	return func(c *Config) error {
+		c.UnicastConfig = unicast
 		return nil
 	}
 }
