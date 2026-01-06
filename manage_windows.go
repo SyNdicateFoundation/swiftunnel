@@ -369,9 +369,15 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 			}
 		} else {
 			if dstFamily == windows.AF_INET {
-				nlRoute.Dst = &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)}
+				nlRoute.Dst = &net.IPNet{
+					IP:   net.IPv4zero,
+					Mask: net.CIDRMask(0, 32),
+				}
 			} else if dstFamily == windows.AF_INET6 {
-				nlRoute.Dst = &net.IPNet{IP: net.IPv6zero, Mask: net.CIDRMask(0, 128)}
+				nlRoute.Dst = &net.IPNet{
+					IP:   net.IPv6zero,
+					Mask: net.CIDRMask(0, 128),
+				}
 			}
 		}
 
