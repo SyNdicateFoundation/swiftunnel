@@ -86,6 +86,7 @@ func ensureDLL() error {
 				dllInitErr = fmt.Errorf("failed to create dir: %w", err)
 				return
 			}
+
 			if err := os.WriteFile(dllPath, wintunDLLData, 0600); err != nil {
 				dllInitErr = fmt.Errorf("failed to write dll: %w", err)
 				return
@@ -99,6 +100,10 @@ func ensureDLL() error {
 		}
 
 		dllInitErr = loadWintunFunctions()
+
+		runtime.SetFinalizer(wintunDLL, func(dll *windows.DLL) {
+			UninstallWintun()
+		})
 	})
 	return dllInitErr
 }
@@ -194,7 +199,7 @@ func NewWintunAdapterWithGUID(name, tunnelType string, componentID swiftypes.GUI
 	}
 
 	runtime.SetFinalizer(adapter, func(a *WintunAdapter) {
-		a.Close()
+		_ = a.Close()
 	})
 
 	return adapter, nil
@@ -212,9 +217,8 @@ func (a *WintunAdapter) Close() error {
 		return ErrInvalidAdapterHandle
 	}
 
-	_, _, err := wintunCloseAdapterFunc.Call(a.handle)
-	if !errors.Is(err, windows.NOERROR) {
-		return fmt.Errorf("failed to close adapter: %v", err)
+	if _, _, err := wintunCloseAdapterFunc.Call(a.handle); err != nil && !errors.Is(err, windows.NOERROR) {
+		return fmt.Errorf("failed to close Wintun adapter: %v", err)
 	}
 
 	a.handle = 0
@@ -246,7 +250,7 @@ func (a *WintunAdapter) StartSession(capacity uint32) (*WintunSession, error) {
 	}
 
 	runtime.SetFinalizer(session, func(s *WintunSession) {
-		s.Close()
+		_ = s.Close()
 	})
 
 	return session, nil
@@ -264,12 +268,11 @@ func (s *WintunSession) Close() error {
 		return ErrInvalidSessionHandle
 	}
 
-	_, _, err := wintunEndSessionFunc.Call(s.handle)
 	s.handle = 0
-
-	if !errors.Is(err, windows.NOERROR) {
+	if _, _, err := wintunEndSessionFunc.Call(s.handle); err != nil && !errors.Is(err, windows.NOERROR) {
 		return fmt.Errorf("failed to end session: %v", err)
 	}
+
 	return s.adapter.Close()
 }
 
@@ -285,7 +288,7 @@ func (s *WintunSession) Write(buf []byte) (int, error) {
 	}
 
 	dataPtr, _, err := wintunAllocateSendPacketFunc.Call(s.handle, uintptr(len(buf)))
-	if dataPtr == 0 {
+	if (err != nil && !errors.Is(err, windows.NOERROR)) || dataPtr == 0 {
 		return 0, fmt.Errorf("ring buffer full or error: %v", err)
 	}
 
@@ -293,8 +296,7 @@ func (s *WintunSession) Write(buf []byte) (int, error) {
 	dst := unsafe.Slice((*byte)(unsafe.Pointer(dataPtr)), len(buf))
 	copy(dst, buf)
 
-	_, _, err = wintunSendPacketFunc.Call(s.handle, dataPtr)
-	if !errors.Is(err, windows.NOERROR) {
+	if _, _, err := wintunSendPacketFunc.Call(s.handle, dataPtr, uintptr(len(buf))); err != nil && !errors.Is(err, windows.NOERROR) {
 		return 0, fmt.Errorf("failed to send packet: %v", err)
 	}
 
@@ -308,15 +310,17 @@ func (s *WintunSession) ReadNow(buf []byte) (int, error) {
 	}
 
 	var packetSize uint32
-	packetPtr, _, err := wintunReceivePacketFunc.Call(s.handle, uintptr(unsafe.Pointer(&packetSize)))
 
+	packetPtr, _, err := wintunReceivePacketFunc.Call(s.handle, uintptr(unsafe.Pointer(&packetSize)))
 	if packetPtr == 0 {
 		if err != nil && err.Error() == "No more data is available." {
 			return 0, ErrNoDataAvailable
 		}
+
 		if !errors.Is(err, windows.NOERROR) {
 			return 0, err
 		}
+
 		return 0, ErrNoDataAvailable
 	}
 
@@ -466,4 +470,6 @@ func UninstallWintun() {
 	if wintunDeleteDriverFunc != nil {
 		wintunDeleteDriverFunc.Call()
 	}
+
+	runtime.SetFinalizer(wintunDLL, nil)
 }
