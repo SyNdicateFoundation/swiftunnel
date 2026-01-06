@@ -18,6 +18,6 @@ func FlushDNS() error {
 	if ret == 0 {
 		return errors.New("failed to flush dns cache via native api")
 	}
-	
+
 	return nil
 }
