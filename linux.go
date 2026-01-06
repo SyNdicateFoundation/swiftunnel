@@ -5,6 +5,7 @@ package swiftunnel
 import (
 	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"io"
 	"os"
@@ -87,6 +88,24 @@ func (a *SwiftInterface) setDeviceOptions(fd uintptr, config *swiftconfig.Config
 // GetFD returns the underlying OS file pointer.
 func (a *SwiftInterface) GetFD() *os.File {
 	return a.ReadWriteCloser.(*os.File)
+}
+
+func (a *SwiftInterface) Close() error {
+	if err := a.ReadWriteCloser.Close(); err != nil {
+		return err
+	}
+
+	index, err := a.GetAdapterIndex()
+	if err != nil {
+		return nil
+	}
+
+	byIndex, err := netlink.LinkByIndex(index)
+	if err != nil {
+		return err
+	}
+
+	return netlink.LinkDel(byIndex)
 }
 
 // NewSwiftInterface opens /dev/net/tun and initializes the SwiftInterface.
