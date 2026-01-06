@@ -65,7 +65,7 @@ func ensureDLL() error {
 			return
 		}
 
-		dirPath := filepath.Join(localAppData, "swiftunnel", "driver", hexHash)
+		dirPath := filepath.Join(localAppData, "swiftunnel", "driver")
 		dllPath := filepath.Join(dirPath, "wintun.dll")
 
 		valid := false
