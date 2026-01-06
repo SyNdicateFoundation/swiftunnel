@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"os"
-	"syscall"
 )
 
 // ioctl performs a system-level I/O control operation.
 func ioctl(fd uintptr, request uintptr, argv uintptr) error {
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, request, argv); errno != 0 {
+	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, fd, request, argv); errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
 	}
 	return nil
@@ -32,12 +32,12 @@ func (a *SwiftInterface) GetAdapterIndex() (int, error) {
 	if a.name == "" {
 		return 0, errors.New("adapter name is not set")
 	}
-	
+
 	ifi, err := netlink.LinkByName(a.name)
 	if err != nil {
 		return 0, err
 	}
-	
+
 	return ifi.Attrs().Index, nil
 }
 
@@ -47,16 +47,16 @@ func (a *SwiftInterface) SetMTU(mtu int) error {
 	if err != nil {
 		return err
 	}
-	
+
 	link, err := netlink.LinkByIndex(index)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
-	
+
 	if err = netlink.LinkSetMTU(link, mtu); err != nil {
 		return fmt.Errorf("failed to set MTU: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -66,18 +66,18 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	if err != nil {
 		return err
 	}
-	
+
 	link, err := netlink.LinkByIndex(index)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
-	
+
 	if err := netlink.AddrAdd(link, &netlink.Addr{
 		IPNet: config.IPNet,
 	}); err != nil {
 		return fmt.Errorf("failed to add address %v to interface %d: %v", config.IPNet, index, err)
 	}
-	
+
 	if config.Gateway != nil {
 		if err := a.AddRoute(&netlink.Route{
 			LinkIndex: link.Attrs().Index,
@@ -86,7 +86,7 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 			return fmt.Errorf("failed to add route to gateway %v: %v", config.Gateway, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -96,19 +96,19 @@ func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
 	if err != nil {
 		return err
 	}
-	
+
 	link, err := netlink.LinkByIndex(index)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
-	
+
 	switch status {
 	case swiftypes.InterfaceUp:
 		return netlink.LinkSetUp(link)
 	case swiftypes.InterfaceDown:
 		return netlink.LinkSetDown(link)
 	}
-	
+
 	return nil
 }
 
@@ -118,13 +118,13 @@ func (a *SwiftInterface) AddRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	route.LinkIndex = index
-	
+
 	if err := netlink.RouteAdd(route); err != nil {
 		return fmt.Errorf("failed to add route %v: %v", route, err)
 	}
-	
+
 	return nil
 }
 
@@ -134,13 +134,13 @@ func (a *SwiftInterface) RemoveRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	route.LinkIndex = index
-	
+
 	if err := netlink.RouteDel(route); err != nil {
 		return fmt.Errorf("failed to add route %v: %v", route, err)
 	}
-	
+
 	return nil
 }
 
@@ -150,13 +150,13 @@ func (a *SwiftInterface) ReplaceRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	route.LinkIndex = index
-	
+
 	if err := netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to add route %v: %v", route, err)
 	}
-	
+
 	return nil
 }
 
@@ -166,13 +166,13 @@ func (a *SwiftInterface) ChangeRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	route.LinkIndex = index
-	
+
 	if err := netlink.RouteChange(route); err != nil {
 		return fmt.Errorf("failed to add route %v: %v", route, err)
 	}
-	
+
 	return nil
 }
 
@@ -182,13 +182,13 @@ func (a *SwiftInterface) AppendRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	route.LinkIndex = index
-	
+
 	if err := netlink.RouteAppend(route); err != nil {
 		return fmt.Errorf("failed to add route %v: %v", route, err)
 	}
-	
+
 	return nil
 }
 
@@ -198,12 +198,12 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	byIndex, err := netlink.LinkByIndex(index)
 	if err != nil {
 		return nil, fmt.Errorf("failed reterive routes %dv: %v", index, err)
 	}
-	
+
 	return netlink.RouteList(byIndex, family)
 }
 

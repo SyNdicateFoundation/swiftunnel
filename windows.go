@@ -86,7 +86,7 @@ func NewSwiftInterface(config *swiftconfig.Config) (*SwiftInterface, error) {
 			return nil, fmt.Errorf("failed to create wintun adapter: %w", err)
 		}
 
-		session, err := adap.StartSession(0x800000)
+		session, err := adap.StartSession(config.RingBuffer)
 		if err != nil {
 			_ = adap.Close()
 			return nil, fmt.Errorf("failed to start wintun session: %w", err)
@@ -123,7 +123,7 @@ func NewSwiftInterface(config *swiftconfig.Config) (*SwiftInterface, error) {
 
 // configureAdapter applies IP, MTU, and DNS settings to a newly created interface.
 func configureAdapter(adapter *SwiftInterface, config *swiftconfig.Config) error {
-	if config.DriverType == swiftconfig.DriverTypeWintun && config.UnicastConfig != nil {
+	if config.UnicastConfig != nil {
 		if err := adapter.SetUnicastIpAddressEntry(config.UnicastConfig); err != nil {
 			return fmt.Errorf("failed to set IP address: %w", err)
 		}

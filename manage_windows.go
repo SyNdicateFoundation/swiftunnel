@@ -10,7 +10,6 @@ import (
 	"golang.org/x/sys/windows"
 	"net"
 	"strings"
-	"syscall"
 	"unsafe"
 )
 
@@ -73,22 +72,22 @@ func (a *SwiftInterface) SetMTU(mtu int) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var ifRow windows.MibIfRow
 	ifRow.Index = uint32(adapterIndex)
-	
+
 	ret, _, _ := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to retrieve interface entry: %w", err)
 	}
-	
+
 	ifRow.Mtu = uint32(mtu)
-	
+
 	ret, _, _ = procSetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to set MTU: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -98,39 +97,39 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	if err != nil {
 		return err
 	}
-	
+
 	var addressRow windows.MibUnicastIpAddressRow
-	
+
 	_, _, _ = procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
-	
+
 	if ipv4 := config.IP.To4(); ipv4 != nil {
-		addressRow.Address.Family = syscall.AF_INET
+		addressRow.Address.Family = windows.AF_INET
 		copy(addressRow.Address.Addr[:net.IPv4len], ipv4)
 	} else if ipv6 := config.IP.To16(); ipv6 != nil {
-		addressRow.Address.Family = syscall.AF_INET6
+		addressRow.Address.Family = windows.AF_INET6
 		copy(addressRow.Address.Addr[:net.IPv6len], ipv6)
 	} else {
 		return fmt.Errorf("invalid IP address: %s", config.IP)
 	}
-	
+
 	ones, bits := config.IPNet.Mask.Size()
 	if ones > bits {
 		return fmt.Errorf("invalid subnet mask: %v", config.IPNet.Mask)
 	}
-	
+
 	if config.DadState == windows.IpDadStateInvalid {
 		addressRow.DadState = windows.IpDadStatePreferred
 	}
-	
+
 	addressRow.InterfaceLuid = luid.ToUint64()
 	addressRow.OnLinkPrefixLength = uint8(ones)
 	addressRow.DadState = config.DadState
-	
+
 	ret, _, _ := procCreateUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&addressRow)))
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) && !errors.Is(errno, windows.ERROR_OBJECT_ALREADY_EXISTS) {
 		return fmt.Errorf("failed to create unicast IP address config: %w (error code: %d)", errno, ret)
 	}
-	
+
 	return nil
 }
 
@@ -140,10 +139,10 @@ func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var settings dnsInterfaceSettings
 	settings.Version = 1
-	
+
 	ret, _, _ := procGetInterfaceDnsSettings.Call(
 		uintptr(unsafe.Pointer(&guid)),
 		uintptr(unsafe.Pointer(&settings)),
@@ -151,7 +150,7 @@ func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to get DNS settings: %w", windows.Errno(ret))
 	}
-	
+
 	if config.Domain != "" {
 		domain, err := windows.UTF16PtrFromString(config.Domain)
 		if err != nil {
@@ -160,31 +159,31 @@ func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 		settings.Domain = domain
 		settings.Flags |= dnsSettingDomain
 	}
-	
+
 	if len(config.DnsServers) > 0 {
 		var servers []string
 		var ipv6 bool
-		
+
 		for _, server := range config.DnsServers {
 			if server.To4() == nil {
 				ipv6 = true
 			}
 			servers = append(servers, server.String())
 		}
-		
+
 		nameServer, err := windows.UTF16PtrFromString(strings.Join(servers, ","))
 		if err != nil {
 			return fmt.Errorf("failed to convert DNS servers to UTF16: %w", err)
 		}
-		
+
 		settings.NameServer = nameServer
 		settings.Flags |= dnsSettingNameserver
-		
+
 		if ipv6 {
 			settings.Flags |= dnsSettingIpv6
 		}
 	}
-	
+
 	ret, _, _ = procSetInterfaceDnsSettings.Call(
 		uintptr(unsafe.Pointer(&guid)),
 		uintptr(unsafe.Pointer(&settings)),
@@ -192,7 +191,7 @@ func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to set DNS settings: %w", windows.Errno(ret))
 	}
-	
+
 	return nil
 }
 
@@ -202,27 +201,27 @@ func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
 	if err != nil {
 		return err
 	}
-	
+
 	var ifRow windows.MibIfRow
 	ifRow.Index = uint32(index)
-	
+
 	ret, _, _ := procGetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to retrieve interface entry: %w", err)
 	}
-	
+
 	switch status {
 	case swiftypes.InterfaceUp:
-		ifRow.AdminStatus = windows.IfOperStatusUp
+		ifRow.OperStatus = windows.IfOperStatusUp
 	case swiftypes.InterfaceDown:
-		ifRow.AdminStatus = windows.IfOperStatusDown
+		ifRow.OperStatus = windows.IfOperStatusDown
 	}
-	
+
 	ret, _, _ = procSetIfEntry.Call(uintptr(unsafe.Pointer(&ifRow)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to set interface status: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -232,7 +231,7 @@ func (a *SwiftInterface) AddRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	ret, _, _ := procCreateIpForwardEntry2.Call(uintptr(unsafe.Pointer(row)))
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		// If the route already exists, we consider it a success (idempotent).
@@ -241,7 +240,7 @@ func (a *SwiftInterface) AddRoute(route *netlink.Route) error {
 		}
 		return fmt.Errorf("failed to add route: %w", errno)
 	}
-	
+
 	return nil
 }
 
@@ -252,15 +251,15 @@ func (a *SwiftInterface) ReplaceRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Try to create the route first
 	ret, _, _ := procCreateIpForwardEntry2.Call(uintptr(unsafe.Pointer(row)))
 	errno := windows.Errno(ret)
-	
+
 	if errors.Is(errno, windows.ERROR_SUCCESS) {
 		return nil
 	}
-	
+
 	// If it already exists, update properties (like Metric) using SetIpForwardEntry2
 	if errors.Is(errno, windows.ERROR_OBJECT_ALREADY_EXISTS) {
 		ret, _, _ = procSetIpForwardEntry2.Call(uintptr(unsafe.Pointer(row)))
@@ -269,7 +268,7 @@ func (a *SwiftInterface) ReplaceRoute(route *netlink.Route) error {
 		}
 		return nil
 	}
-	
+
 	return fmt.Errorf("failed to replace (create) route: %w", errno)
 }
 
@@ -279,13 +278,13 @@ func (a *SwiftInterface) ChangeRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// SetIpForwardEntry2 modifies properties of an existing route.
 	ret, _, _ := procSetIpForwardEntry2.Call(uintptr(unsafe.Pointer(row)))
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		return fmt.Errorf("failed to change route: %w", errno)
 	}
-	
+
 	return nil
 }
 
@@ -296,7 +295,7 @@ func (a *SwiftInterface) AppendRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	ret, _, _ := procCreateIpForwardEntry2.Call(uintptr(unsafe.Pointer(row)))
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		// Append in netlink often implies adding a multipath route, which Windows supports via Create.
@@ -306,7 +305,7 @@ func (a *SwiftInterface) AppendRoute(route *netlink.Route) error {
 		}
 		return fmt.Errorf("failed to append route: %w", errno)
 	}
-	
+
 	return nil
 }
 
@@ -316,8 +315,8 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	
-	// family: syscall.AF_INET (2) or syscall.AF_INET6 (23) or AF_UNSPEC (0)
+
+	// family: windows.AF_INET (2) or windows.AF_INET6 (23) or AF_UNSPEC (0)
 	var table *windows.MibIpForwardTable2
 	ret, _, _ := procGetIpForwardTable2.Call(
 		uintptr(family),
@@ -326,41 +325,41 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		return nil, fmt.Errorf("failed to get route table: %w", errno)
 	}
-	
+
 	defer procFreeMibTable.Call(uintptr(unsafe.Pointer(table)))
-	
+
 	if table.NumEntries == 0 {
 		return []netlink.Route{}, nil
 	}
-	
+
 	var routes []netlink.Route
 	rowSize := unsafe.Sizeof(windows.MibIpForwardRow2{})
 	// table.Table is an array starting at offset 4 (after NumEntries uint32) + padding
 	base := uintptr(unsafe.Pointer(&table.Table[0]))
-	
+
 	for i := uint32(0); i < table.NumEntries; i++ {
 		//goland:noinspection GoVetUnsafePointer
 		row := (*windows.MibIpForwardRow2)(unsafe.Pointer(base + uintptr(i)*rowSize))
-		
+
 		// Filter by interface index
 		if int(row.InterfaceIndex) != idx {
 			continue
 		}
-		
+
 		nlRoute := netlink.Route{
 			LinkIndex: idx,
 			Priority:  int(row.Metric),
 			Protocol:  netlink.RouteProtocol(row.Protocol),
 		}
-		
+
 		// Parse Destination
 		if row.DestinationPrefix.PrefixLength > 0 {
 			f := row.DestinationPrefix.Prefix.Family
 			var ip net.IP
-			if f == syscall.AF_INET {
+			if f == windows.AF_INET {
 				b := (*[4]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[0]))
 				ip = net.IPv4(b[0], b[1], b[2], b[3])
-			} else if f == syscall.AF_INET6 {
+			} else if f == windows.AF_INET6 {
 				b := (*[16]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[1]))
 				ip = b[:]
 			}
@@ -371,24 +370,24 @@ func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
 				}
 			}
 		}
-		
+
 		// Parse Gateway (NextHop)
 		if row.NextHop.Family != 0 {
 			f := row.NextHop.Family
 			var gw net.IP
-			if f == syscall.AF_INET {
+			if f == windows.AF_INET {
 				b := (*[4]byte)(unsafe.Pointer(&row.NextHop.Data[0]))
 				gw = net.IPv4(b[0], b[1], b[2], b[3])
-			} else if f == syscall.AF_INET6 {
+			} else if f == windows.AF_INET6 {
 				b := (*[16]byte)(unsafe.Pointer(&row.NextHop.Data[1]))
 				gw = b[:]
 			}
 			nlRoute.Gw = gw
 		}
-		
+
 		routes = append(routes, nlRoute)
 	}
-	
+
 	return routes, nil
 }
 
@@ -398,14 +397,14 @@ func (a *SwiftInterface) RemoveRoute(route *netlink.Route) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// DeleteIpForwardEntry2 finds the entry matching Interface, Destination, and NextHop.
 	ret, _, _ := procDeleteIpForwardEntry2.Call(uintptr(unsafe.Pointer(row)))
 	if errno := windows.Errno(ret); !errors.Is(errno, windows.ERROR_SUCCESS) {
 		// Optionally ignore "element not found" (ERROR_FILE_NOT_FOUND or similar) if idempotency is desired.
 		return fmt.Errorf("failed to remove route: %w", errno)
 	}
-	
+
 	return nil
 }
 
@@ -415,13 +414,13 @@ func (a *SwiftInterface) routeToRow(route *netlink.Route) (*windows.MibIpForward
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var row windows.MibIpForwardRow2
 	ret, _, _ := procInitializeIpForwardEntry.Call(uintptr(unsafe.Pointer(&row)))
 	if err := windows.Errno(ret); !errors.Is(err, windows.ERROR_SUCCESS) {
 		return nil, fmt.Errorf("failed to initialize ip forward entry: %w", err)
 	}
-	
+
 	row.InterfaceLuid = luid.ToUint64()
 	row.InterfaceIndex = 0 // LUID takes precedence
 	row.Metric = uint32(route.Priority)
@@ -429,44 +428,44 @@ func (a *SwiftInterface) routeToRow(route *netlink.Route) (*windows.MibIpForward
 	row.Origin = nlRouteOriginManual
 	row.ValidLifetime = 0xffffffff
 	row.PreferredLifetime = 0xffffffff
-	
+
 	// Set Destination Prefix
 	if route.Dst != nil {
 		ones, _ := route.Dst.Mask.Size()
 		row.DestinationPrefix.PrefixLength = uint8(ones)
-		
+
 		if ipv4 := route.Dst.IP.To4(); ipv4 != nil {
-			row.DestinationPrefix.Prefix.Family = syscall.AF_INET
+			row.DestinationPrefix.Prefix.Family = windows.AF_INET
 			copy((*[4]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[0]))[:], ipv4)
 		} else if ipv6 := route.Dst.IP.To16(); ipv6 != nil {
-			row.DestinationPrefix.Prefix.Family = syscall.AF_INET6
+			row.DestinationPrefix.Prefix.Family = windows.AF_INET6
 			copy((*[16]byte)(unsafe.Pointer(&row.DestinationPrefix.Prefix.Data[1]))[:], ipv6)
 		}
 	} else {
 		// Handle default route logic
 		if route.Gw != nil {
 			if route.Gw.To4() != nil {
-				row.DestinationPrefix.Prefix.Family = syscall.AF_INET
+				row.DestinationPrefix.Prefix.Family = windows.AF_INET
 				row.DestinationPrefix.PrefixLength = 0
 			} else {
-				row.DestinationPrefix.Prefix.Family = syscall.AF_INET6
+				row.DestinationPrefix.Prefix.Family = windows.AF_INET6
 				row.DestinationPrefix.PrefixLength = 0
 			}
 		} else {
 			return nil, errors.New("cannot determine address family for default route (dst=nil, gw=nil)")
 		}
 	}
-	
+
 	// Set Next Hop (Gateway)
 	if route.Gw != nil {
 		if ipv4 := route.Gw.To4(); ipv4 != nil {
-			row.NextHop.Family = syscall.AF_INET
+			row.NextHop.Family = windows.AF_INET
 			copy((*[4]byte)(unsafe.Pointer(&row.NextHop.Data[0]))[:], ipv4)
 		} else if ipv6 := route.Gw.To16(); ipv6 != nil {
-			row.NextHop.Family = syscall.AF_INET6
+			row.NextHop.Family = windows.AF_INET6
 			copy((*[16]byte)(unsafe.Pointer(&row.NextHop.Data[1]))[:], ipv6)
 		}
 	}
-	
+
 	return &row, nil
 }

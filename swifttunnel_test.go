@@ -12,7 +12,7 @@ import (
 func TestNewDefaultConfig(t *testing.T) {
 	// Create a default configuration
 	config, err := swiftconfig.New(
-		swiftconfig.WithUnicastConfig("10.18.21.1/24"),
+		swiftconfig.WithUnicastIP("10.18.21.1/24"),
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"golang.org/x/sys/unix"
 	"io"
 	"math"
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"unsafe"
 )
 
@@ -41,7 +41,7 @@ type sockaddrCtl struct {
 }
 
 // openDevSystem initializes a native macOS utun interface.
-func openDevSystem(config swiftconfig.Config) (*SwiftInterface, error) {
+func openDevSystem(config *swiftconfig.Config) (*SwiftInterface, error) {
 	if config.AdapterType != swiftypes.AdapterTypeTUN {
 		return nil, errors.New("only TUN is supported for SystemDriver; use TunTapOSXDriver for TAP")
 	}
@@ -51,13 +51,13 @@ func openDevSystem(config swiftconfig.Config) (*SwiftInterface, error) {
 		return nil, err
 	}
 
-	fd, err := syscall.Socket(syscall.AF_SYSTEM, syscall.SOCK_DGRAM, 2)
+	fd, err := unix.Socket(unix.AF_SYSTEM, unix.SOCK_DGRAM, 2)
 	if err != nil {
 		return nil, fmt.Errorf("error creating socket: %w", err)
 	}
 
 	defer func(fd int) {
-		_ = syscall.Close(fd)
+		_ = unix.Close(fd)
 	}(fd)
 
 	ctlInfo := &struct {
@@ -72,7 +72,7 @@ func openDevSystem(config swiftconfig.Config) (*SwiftInterface, error) {
 
 	sockAddr := &sockaddrCtl{
 		scLen:     sockaddrCtlSize,
-		scFamily:  syscall.AF_SYSTEM,
+		scFamily:  unix.AF_SYSTEM,
 		ssSysaddr: 2,
 		scID:      ctlInfo.ctlID,
 		scUnit:    uint32(ifIndex) + 1,
@@ -110,7 +110,7 @@ func parseUtunIndex(name string) (int, error) {
 }
 
 // openDevTunTapOSX initializes a third-party TunTapOSX driver interface.
-func openDevTunTapOSX(config swiftconfig.Config) (*SwiftInterface, error) {
+func openDevTunTapOSX(config *swiftconfig.Config) (*SwiftInterface, error) {
 	if len(config.AdapterName) >= maxAdapterNameLen {
 		return nil, errors.New("device name is too long")
 	}
@@ -122,13 +122,13 @@ func openDevTunTapOSX(config swiftconfig.Config) (*SwiftInterface, error) {
 		return nil, fmt.Errorf("device name must start with %s", expected)
 	}
 
-	fd, err := syscall.Open("/dev/"+config.AdapterName, os.O_RDWR|syscall.O_NONBLOCK, 0)
+	fd, err := unix.Open("/dev/"+config.AdapterName, os.O_RDWR|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, fmt.Errorf("error opening device: %w", err)
 	}
 
 	if err := setIfUp(uintptr(fd), config.AdapterName); err != nil {
-		_ = syscall.Close(fd)
+		_ = unix.Close(fd)
 		return nil, err
 	}
 
@@ -143,7 +143,7 @@ func openDevTunTapOSX(config swiftconfig.Config) (*SwiftInterface, error) {
 
 // connect performs a system call to connect the control socket.
 func connect(fd int, addr *sockaddrCtl) error {
-	_, _, errno := syscall.RawSyscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(addr)), sockaddrCtlSize)
+	_, _, errno := unix.RawSyscall(unix.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(addr)), sockaddrCtlSize)
 	if errno != 0 {
 		return errno
 	}
@@ -155,7 +155,7 @@ func getIfName(fd int) (string, error) {
 	var ifName [16]byte
 	ifNameSize := uintptr(len(ifName))
 
-	_, _, errno := syscall.Syscall6(syscall.SYS_GETSOCKOPT, uintptr(fd), 2, 2, uintptr(unsafe.Pointer(&ifName)), uintptr(unsafe.Pointer(&ifNameSize)), 0)
+	_, _, errno := unix.Syscall6(unix.SYS_GETSOCKOPT, uintptr(fd), 2, 2, uintptr(unsafe.Pointer(&ifName)), uintptr(unsafe.Pointer(&ifNameSize)), 0)
 	if errno != 0 {
 		return "", errno
 	}
@@ -170,9 +170,9 @@ func setIfUp(fd uintptr, ifName string) error {
 		pad       [16]byte
 	}{}
 	copy(ifReq.ifName[:], ifName)
-	ifReq.ifruFlags |= syscall.IFF_RUNNING | syscall.IFF_UP
+	ifReq.ifruFlags |= unix.IFF_RUNNING | unix.IFF_UP
 
-	return ioctl(fd, syscall.SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifReq)))
+	return ioctl(fd, unix.SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifReq)))
 }
 
 type tunReadCloser struct {
@@ -210,9 +210,9 @@ func (t *tunReadCloser) Write(from []byte) (int, error) {
 	var proto uint32
 	switch from[0] >> 4 {
 	case 4:
-		proto = syscall.AF_INET
+		proto = unix.AF_INET
 	case 6:
-		proto = syscall.AF_INET6
+		proto = unix.AF_INET6
 	default:
 		return 0, errors.New("unknown ip version")
 	}

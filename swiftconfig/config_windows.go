@@ -25,6 +25,7 @@ type Config struct {
 	AdapterType     swiftypes.AdapterType
 	DriverType      DriverType
 
+	RingBuffer    uint32
 	MTU           int
 	DNSConfig     *swiftypes.DNSConfig
 	UnicastConfig *swiftypes.UnicastConfig
@@ -38,6 +39,7 @@ func New(opts ...Option) (*Config, error) {
 		AdapterType:     swiftypes.AdapterTypeTUN,
 		DriverType:      DriverTypeWintun,
 		MTU:             1500,
+		RingBuffer:      0x800000,
 	}
 
 	for _, opt := range opts {
@@ -135,6 +137,18 @@ func WithMTU(mtu int) Option {
 		}
 
 		c.MTU = mtu
+		return nil
+	}
+}
+
+// WithRingBuffer sets the adapter RingBuffer.
+func WithRingBuffer(ringBuffer uint32) Option {
+	return func(c *Config) error {
+		if ringBuffer < 1024 {
+			return errors.New("MTU must be between 576 and 20MB")
+		}
+
+		c.RingBuffer = ringBuffer
 		return nil
 	}
 }

@@ -5,15 +5,15 @@ package swiftunnel
 import (
 	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"strings"
-	"syscall"
 	"unsafe"
 )
 
 type ifReq struct {
-	Name  [syscall.IFNAMSIZ]byte
+	Name  [unix.IFNAMSIZ]byte
 	Flags uint16
 	_     [0x28 - 0x10 - 2]byte
 }
@@ -27,16 +27,16 @@ type SwiftInterface struct {
 
 // initializeAdapter configures the flags and creates the Linux interface via ioctl.
 func (a *SwiftInterface) initializeAdapter(config *swiftconfig.Config, fd uintptr) (string, error) {
-	flags := syscall.IFF_NO_PI
+	flags := unix.IFF_NO_PI
 
 	if config.AdapterType == swiftypes.AdapterTypeTUN {
-		flags |= syscall.IFF_TUN
+		flags |= unix.IFF_TUN
 	} else {
-		flags |= syscall.IFF_TAP
+		flags |= unix.IFF_TAP
 	}
 
 	if config.MultiQueue {
-		flags |= syscall.IFF_PROMISC
+		flags |= unix.IFF_PROMISC
 	}
 
 	ifName, err := a.createInterface(fd, config.AdapterName, uint16(flags))
@@ -58,7 +58,7 @@ func (a *SwiftInterface) createInterface(fd uintptr, ifName string, flags uint16
 	req.Flags = flags
 	copy(req.Name[:], ifName)
 
-	if err := ioctl(fd, syscall.TUNSETIFF, uintptr(unsafe.Pointer(&req))); err != nil {
+	if err := ioctl(fd, unix.TUNSETIFF, uintptr(unsafe.Pointer(&req))); err != nil {
 		return "", err
 	}
 
@@ -68,10 +68,10 @@ func (a *SwiftInterface) createInterface(fd uintptr, ifName string, flags uint16
 // setDeviceOptions configures persistence and ownership permissions.
 func (a *SwiftInterface) setDeviceOptions(fd uintptr, config *swiftconfig.Config) error {
 	if config.Permissions != nil {
-		if err := ioctl(fd, syscall.TUNSETOWNER, uintptr(config.Permissions.Owner)); err != nil {
+		if err := ioctl(fd, unix.TUNSETOWNER, uintptr(config.Permissions.Owner)); err != nil {
 			return err
 		}
-		if err := ioctl(fd, syscall.TUNSETGROUP, uintptr(config.Permissions.Group)); err != nil {
+		if err := ioctl(fd, unix.TUNSETGROUP, uintptr(config.Permissions.Group)); err != nil {
 			return err
 		}
 	}
@@ -81,7 +81,7 @@ func (a *SwiftInterface) setDeviceOptions(fd uintptr, config *swiftconfig.Config
 		persistFlag = 1
 	}
 
-	return ioctl(fd, syscall.TUNSETPERSIST, uintptr(persistFlag))
+	return ioctl(fd, unix.TUNSETPERSIST, uintptr(persistFlag))
 }
 
 // GetFD returns the underlying OS file pointer.
@@ -91,7 +91,7 @@ func (a *SwiftInterface) GetFD() *os.File {
 
 // NewSwiftInterface opens /dev/net/tun and initializes the SwiftInterface.
 func NewSwiftInterface(config *swiftconfig.Config) (*SwiftInterface, error) {
-	fd, err := syscall.Open("/dev/net/tun", os.O_RDWR, 0)
+	fd, err := unix.Open("/dev/net/tun", os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
