@@ -29,7 +29,7 @@ type Config struct {
 // New initializes a Config struct with default values and functional options.
 func New(opts ...Option) (*Config, error) {
 	cfg := &Config{
-		AdapterName: "Swiftunnel VPN",
+		AdapterName: "swiftunnelvpn",
 		AdapterType: swiftypes.AdapterTypeTUN,
 		MTU:         1500,
 	}

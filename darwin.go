@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"io"
 	"math"
@@ -21,6 +22,7 @@ type SwiftInterface struct {
 	*tunReadCloser
 	name        string
 	AdapterType swiftypes.AdapterType
+	index       int
 }
 
 const (
@@ -64,6 +66,7 @@ func openDevSystem(config *swiftconfig.Config) (*SwiftInterface, error) {
 		ctlID   uint32
 		ctlName [96]byte
 	}{}
+
 	copy(ctlInfo.ctlName[:], appleUTUNCtl)
 
 	if err := ioctl(uintptr(fd), uintptr(appleCTLIOCGINFO), uintptr(unsafe.Pointer(ctlInfo))); err != nil {
@@ -88,6 +91,7 @@ func openDevSystem(config *swiftconfig.Config) (*SwiftInterface, error) {
 
 	return &SwiftInterface{
 		name:        ifName,
+		index:       ifIndex,
 		AdapterType: config.AdapterType,
 		tunReadCloser: &tunReadCloser{
 			f: os.NewFile(uintptr(fd), ifName),
@@ -106,6 +110,7 @@ func parseUtunIndex(name string) (int, error) {
 	if err != nil || index < 0 || index > math.MaxUint32-1 {
 		return -1, fmt.Errorf("invalid interface index in name: %w", err)
 	}
+
 	return index, nil
 }
 
@@ -114,10 +119,12 @@ func openDevTunTapOSX(config *swiftconfig.Config) (*SwiftInterface, error) {
 	if len(config.AdapterName) >= maxAdapterNameLen {
 		return nil, errors.New("device name is too long")
 	}
+
 	prefix := map[swiftypes.AdapterType]string{
 		swiftypes.AdapterTypeTUN: "tun",
 		swiftypes.AdapterTypeTAP: "tap",
 	}
+
 	if expected, ok := prefix[config.AdapterType]; !ok || !strings.HasPrefix(config.AdapterName, expected) {
 		return nil, fmt.Errorf("device name must start with %s", expected)
 	}
@@ -132,8 +139,14 @@ func openDevTunTapOSX(config *swiftconfig.Config) (*SwiftInterface, error) {
 		return nil, err
 	}
 
+	name, err := netlink.LinkByName(config.AdapterName)
+	if err != nil {
+		return nil, err
+	}
+
 	return &SwiftInterface{
 		name:        config.AdapterName,
+		index:       name.Attrs().Index,
 		AdapterType: config.AdapterType,
 		tunReadCloser: &tunReadCloser{
 			f: os.NewFile(uintptr(fd), config.AdapterName),
@@ -159,6 +172,7 @@ func getIfName(fd int) (string, error) {
 	if errno != 0 {
 		return "", errno
 	}
+
 	return string(ifName[:ifNameSize-1]), nil
 }
 
@@ -169,6 +183,7 @@ func setIfUp(fd uintptr, ifName string) error {
 		ifruFlags int16
 		pad       [16]byte
 	}{}
+
 	copy(ifReq.ifName[:], ifName)
 	ifReq.ifruFlags |= unix.IFF_RUNNING | unix.IFF_UP
 
@@ -198,6 +213,7 @@ func (t *tunReadCloser) Read(to []byte) (int, error) {
 	}
 
 	copy(to, buf[4:n])
+
 	return payloadLen, nil
 }
 
