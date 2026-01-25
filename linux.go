@@ -3,6 +3,7 @@
 package swiftunnel
 
 import (
+	"fmt"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftconfig"
 	"github.com/SyNdicateFoundation/swiftunnel/swiftypes"
 	"github.com/vishvananda/netlink"
@@ -24,6 +25,7 @@ type SwiftInterface struct {
 	io.ReadWriteCloser
 	name        string
 	adapterType swiftypes.AdapterType
+	index       int
 }
 
 // initializeAdapter configures the flags and creates the Linux interface via ioctl.
@@ -91,21 +93,23 @@ func (a *SwiftInterface) GetFD() *os.File {
 }
 
 func (a *SwiftInterface) Close() error {
-	if err := a.ReadWriteCloser.Close(); err != nil {
-		return err
-	}
+	closeErr := a.ReadWriteCloser.Close()
 
-	index, err := a.GetAdapterIndex()
+	index, err := a.GetAdapterName()
 	if err != nil {
 		return nil
 	}
 
-	byIndex, err := netlink.LinkByIndex(index)
+	byName, err := netlink.LinkByName(index)
 	if err != nil {
 		return err
 	}
 
-	return netlink.LinkDel(byIndex)
+	if err = netlink.LinkDel(byName); err != nil {
+		return err
+	}
+
+	return closeErr
 }
 
 // NewSwiftInterface opens /dev/net/tun and initializes the SwiftInterface.
@@ -125,6 +129,16 @@ func NewSwiftInterface(config *swiftconfig.Config) (*SwiftInterface, error) {
 		_ = adapter.Close()
 		return nil, err
 	}
+
+	adapter.name = adapterName
+
+	link, err := netlink.LinkByName(adapterName)
+	if err != nil {
+		_ = adapter.Close()
+		return nil, fmt.Errorf("failed to get link index: %w", err)
+	}
+
+	adapter.index = link.Attrs().Index
 
 	adapter.name = adapterName
 

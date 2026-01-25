@@ -29,26 +29,20 @@ func (a *SwiftInterface) GetAdapterName() (string, error) {
 
 // GetAdapterIndex retrieves the system-wide link index of the interface.
 func (a *SwiftInterface) GetAdapterIndex() (int, error) {
-	if a.name == "" {
-		return 0, errors.New("adapter name is not set")
+	if a.index != 0 {
+		return a.index, nil
 	}
-
-	ifi, err := netlink.LinkByName(a.name)
-	if err != nil {
-		return 0, err
-	}
-
-	return ifi.Attrs().Index, nil
+	return 0, errors.New("adapter index not initialized")
 }
 
 // SetMTU updates the Maximum Transmission Unit for the Unix interface.
 func (a *SwiftInterface) SetMTU(mtu int) error {
-	index, err := a.GetAdapterIndex()
+	name, err := a.GetAdapterName()
 	if err != nil {
 		return err
 	}
 
-	link, err := netlink.LinkByIndex(index)
+	link, err := netlink.LinkByName(name)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
@@ -62,12 +56,12 @@ func (a *SwiftInterface) SetMTU(mtu int) error {
 
 // SetUnicastIpAddressEntry assigns an IP address and optional gateway to the interface.
 func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfig) error {
-	index, err := a.GetAdapterIndex()
+	name, err := a.GetAdapterName()
 	if err != nil {
 		return err
 	}
 
-	link, err := netlink.LinkByIndex(index)
+	link, err := netlink.LinkByName(name)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
@@ -75,7 +69,7 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 	if err := netlink.AddrAdd(link, &netlink.Addr{
 		IPNet: config.IPNet,
 	}); err != nil {
-		return fmt.Errorf("failed to add address %v to interface %d: %v", config.IPNet, index, err)
+		return fmt.Errorf("failed to add address %v to interface %s: %v", config.IPNet, name, err)
 	}
 
 	if config.Gateway != nil {
@@ -92,12 +86,12 @@ func (a *SwiftInterface) SetUnicastIpAddressEntry(config *swiftypes.UnicastConfi
 
 // SetStatus toggles the interface between Up and Down states.
 func (a *SwiftInterface) SetStatus(status swiftypes.InterfaceStatus) error {
-	index, err := a.GetAdapterIndex()
+	name, err := a.GetAdapterName()
 	if err != nil {
 		return err
 	}
 
-	link, err := netlink.LinkByIndex(index)
+	link, err := netlink.LinkByName(name)
 	if err != nil {
 		return fmt.Errorf("failed to find interface: %w", err)
 	}
@@ -194,20 +188,20 @@ func (a *SwiftInterface) AppendRoute(route *netlink.Route) error {
 
 // RouteList remove a network route via the current interface.
 func (a *SwiftInterface) RouteList(family int) ([]netlink.Route, error) {
-	index, err := a.GetAdapterIndex()
+	name, err := a.GetAdapterName()
 	if err != nil {
 		return nil, err
 	}
 
-	byIndex, err := netlink.LinkByIndex(index)
+	byName, err := netlink.LinkByName(name)
 	if err != nil {
-		return nil, fmt.Errorf("failed reterive routes %dv: %v", index, err)
+		return nil, fmt.Errorf("failed reterive routes %s: %v", name, err)
 	}
 
-	return netlink.RouteList(byIndex, family)
+	return netlink.RouteList(byName, family)
 }
 
 // SetDNS is currently unsupported on Unix-like SwiftInterfaces.
-func (a *SwiftInterface) SetDNS(config *swiftypes.DNSConfig) error {
+func (a *SwiftInterface) SetDNS(_ *swiftypes.DNSConfig) error {
 	return errors.New("DNS configuration not supported on this platform")
 }
